@@ -21,8 +21,8 @@ def sample_note_content():
     return """---
 category: test-category
 tags: [test, sample]
-created: 2025-01-13T10:00:00
-modified: 2025-01-13T10:00:00
+created: "2025-01-13T10:00:00"
+modified: "2025-01-13T10:00:00"
 ---
 
 # Test Note
@@ -36,12 +36,14 @@ Some text here.
 
 
 @pytest.fixture
-def config_data():
+def config_data(temp_notes_dir):
     """Sample configuration data."""
     return {
-        "notes_dir": str(Path.home() / "test-notes"),
+        "notes_dir": str(temp_notes_dir),
         "editor": "vim",
         "git_enabled": True,
-        "git_auto_commit": True,
-        "git_auto_push": False,
+        "git_commit_interval": 300,
+        "watch_enabled": False,
+        "fzf_preview": True,
+        "fzf_preview_command": "bat --style=plain --color=always {}",
     }

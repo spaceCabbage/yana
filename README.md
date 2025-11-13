@@ -145,17 +145,17 @@ yana sync
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `notes_dir` | string | *required* | Path to notes directory |
-| `editor` | string | `"vim"` | Editor command |
-| `git_enabled` | boolean | `true` | Enable git sync |
-| `git_auto_commit` | boolean | `true` | Auto-commit on save |
-| `git_auto_push` | boolean | `false` | Auto-push commits |
-| `git_commit_interval` | integer | `300` | Auto-commit interval (seconds) |
-| `watch_enabled` | boolean | `false` | Watch for external file changes |
-| `fzf_preview` | boolean | `true` | Show preview in FZF |
-| `fzf_preview_command` | string | `"bat --style=plain --color=always {}"` | Preview command |
+| Option                | Type    | Default                                 | Description                     |
+|-----------------------|---------|-----------------------------------------|---------------------------------|
+| `notes_dir`           | string  | *required*                              | Path to notes directory         |
+| `editor`              | string  | `"vim"`                                 | Editor command                  |
+| `git_enabled`         | boolean | `true`                                  | Enable git sync                 |
+| `git_auto_commit`     | boolean | `true`                                  | Auto-commit on save             |
+| `git_auto_push`       | boolean | `false`                                 | Auto-push commits               |
+| `git_commit_interval` | integer | `300`                                   | Auto-commit interval (seconds)  |
+| `watch_enabled`       | boolean | `false`                                 | Watch for external file changes |
+| `fzf_preview`         | boolean | `true`                                  | Show preview in FZF             |
+| `fzf_preview_command` | string  | `"bat --style=plain --color=always {}"` | Preview command                 |
 
 ### Environment Variables
 
@@ -306,38 +306,6 @@ pytest -v
 - [ ] Welcome dashboard
 
 See [TODO.md](TODO.md) for the complete task list with granular breakdown.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Run the test suite
-6. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Acknowledgments
-
-Built with:
-- [Typer](https://typer.tiangolo.com/) - Modern CLI framework
-- [Rich](https://rich.readthedocs.io/) - Beautiful terminal output
-- [iterfzf](https://github.com/dahlia/iterfzf) - Python wrapper for FZF
-- [PyYAML](https://pyyaml.org/) - YAML parser
-- [Watchdog](https://python-watchdog.readthedocs.io/) - File system monitoring
-
-Inspired by tools like `zk`, `nb`, and other CLI note-taking apps.
-
-## Support
-
-- **Documentation**: See [CLAUDE.md](CLAUDE.md) for technical details
-- **Issues**: Report bugs or request features via GitHub Issues
-- **Questions**: Open a discussion on GitHub
 
 ---
 

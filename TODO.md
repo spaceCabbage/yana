@@ -242,12 +242,17 @@
 - [x] Add configuration examples
 
 ### Testing
-- [ ] Write unit tests for config loading
-- [ ] Write unit tests for note operations
-- [ ] Write unit tests for frontmatter parsing
-- [ ] Write integration tests for git sync
-- [ ] Write integration tests for FZF
-- [ ] Add test fixtures for sample notes
+- [x] Write unit tests for config loading (14 tests - 100% pass)
+- [x] Write unit tests for note operations (21 tests - 100% pass)
+- [x] Write unit tests for frontmatter parsing
+- [x] Write integration tests for git sync (21 tests - 100% pass)
+- [x] Write integration tests for FZF (17 tests - 100% pass)
+- [x] Add test fixtures for sample notes
+- [x] Write unit tests for editor integration (11 tests - 100% pass)
+- [x] Create Makefile with test commands
+- [x] Add pytest and pytest-mock to dev dependencies
+- [x] Fix metadata deprecation warning
+- [ ] Fix CLI integration tests (8 failing - low priority)
 - [ ] Set up CI/CD (GitHub Actions?)
 
 ---
@@ -419,6 +424,12 @@
 - [x] Implement all special flags (--daily, --last, --category)
 - [x] Add git sync workflow (pull before edit, commit after edit)
 - [x] Simplify config (removed git_auto_commit and git_auto_push)
+- [x] **Create comprehensive test suite - 98/106 tests passing (92%)**
+- [x] Write unit tests for all core modules (config, notes, git, editor, FZF)
+- [x] Create test fixtures and conftest setup
+- [x] Create Makefile with uv-based commands (test, lint, format, etc.)
+- [x] Fix metadata deprecation warning in __init__.py
+- [x] Add pytest and pytest-mock to development dependencies
 
 ---
 

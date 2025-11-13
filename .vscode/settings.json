@@ -1,6 +1,6 @@
 {
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.patterns": {
-    "README.md": "LICENSE.md, config.example.json, uv.lock, TODO.md, .gitignore, .python-version, CLAUDE.md, pyproject.toml, .coverage"
+    "README.md": "Makefile, LICENSE.md, config.example.json, uv.lock, TODO.md, .gitignore, .python-version, CLAUDE.md, pyproject.toml, .coverage"
   }
 }
