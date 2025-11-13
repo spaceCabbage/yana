@@ -1,9 +1,8 @@
-import sys
+"""
+Entry point for running YANA as a module: python -m yana
+"""
 
-
-def main():
-    print("started")
-
+from src.cli import app
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

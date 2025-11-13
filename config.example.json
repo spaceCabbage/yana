@@ -1,0 +1,11 @@
+{
+  "notes_dir": "~/notes",
+  "editor": "nvim",
+  "git_enabled": true,
+  "git_auto_commit": true,
+  "git_auto_push": false,
+  "git_commit_interval": 300,
+  "watch_enabled": false,
+  "fzf_preview": true,
+  "fzf_preview_command": "bat --style=plain --color=always {}"
+}

@@ -1,0 +1,246 @@
+"""
+Note management and operations.
+"""
+
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+import frontmatter
+
+from src.utils import NoteError
+
+
+@dataclass(slots=True, frozen=True)
+class Note:
+    """Represents a markdown note with frontmatter."""
+
+    path: Path
+    title: str
+    category: str
+    tags: list[str]
+    content: str
+    created_at: datetime
+    modified_at: datetime
+
+    @classmethod
+    def from_file(cls, path: Path) -> "Note":
+        """
+        Load a note from a markdown file with YAML frontmatter.
+
+        Expected frontmatter format:
+        ---
+        category: work-projects
+        tags: [meeting, action-items]
+        created: 2025-01-13T10:30:00
+        modified: 2025-01-13T15:45:00
+        ---
+        """
+        try:
+            post = frontmatter.load(path)
+        except Exception as e:
+            raise NoteError(f"Failed to parse frontmatter in {path}: {e}")
+
+        # Extract metadata
+        metadata = post.metadata
+        category = metadata.get("category", "uncategorized")
+        tags = metadata.get("tags", [])
+        created_str = metadata.get("created")
+        modified_str = metadata.get("modified")
+
+        # Parse timestamps
+        try:
+            created_at = (
+                datetime.fromisoformat(created_str)
+                if created_str
+                else datetime.fromtimestamp(path.stat().st_ctime)
+            )
+            modified_at = (
+                datetime.fromisoformat(modified_str)
+                if modified_str
+                else datetime.fromtimestamp(path.stat().st_mtime)
+            )
+        except Exception as e:
+            raise NoteError(f"Invalid timestamp in {path}: {e}")
+
+        # Extract title from filename
+        title = path.stem.replace("-", " ").title()
+
+        return cls(
+            path=path,
+            title=title,
+            category=category,
+            tags=tags,
+            content=post.content,
+            created_at=created_at,
+            modified_at=modified_at,
+        )
+
+    def save(self) -> None:
+        """Save note to file with updated frontmatter."""
+        post = frontmatter.Post(
+            self.content,
+            category=self.category,
+            tags=self.tags,
+            created=self.created_at.isoformat(),
+            modified=datetime.now().isoformat(),
+        )
+
+        try:
+            with open(self.path, "w") as f:
+                f.write(frontmatter.dumps(post))
+        except Exception as e:
+            raise NoteError(f"Failed to save note {self.path}: {e}")
+
+
+class NoteManager:
+    """Manages note operations and queries."""
+
+    def __init__(self, notes_dir: Path) -> None:
+        self.notes_dir = notes_dir
+        self._cache: Optional[list[Note]] = None
+
+    def list_all_notes(self, invalidate_cache: bool = False) -> list[Note]:
+        """
+        List all markdown notes in the notes directory.
+
+        Args:
+            invalidate_cache: Force reload from disk
+
+        Returns:
+            List of Note objects sorted by modified time (newest first)
+        """
+        if self._cache is not None and not invalidate_cache:
+            return self._cache
+
+        notes = []
+        for md_file in self.notes_dir.rglob("*.md"):
+            try:
+                note = Note.from_file(md_file)
+                notes.append(note)
+            except NoteError as e:
+                # Skip files that can't be parsed
+                print(f"Warning: {e}")
+                continue
+
+        # Sort by modified time (newest first)
+        notes.sort(key=lambda n: n.modified_at, reverse=True)
+
+        self._cache = notes
+        return notes
+
+    def get_note(self, path: Path) -> Note:
+        """Load a single note by path."""
+        if not path.exists():
+            raise NoteError(f"Note not found: {path}")
+        return Note.from_file(path)
+
+    def create_note(
+        self, title: str, category: str, tags: Optional[list[str]] = None
+    ) -> Note:
+        """
+        Create a new note with frontmatter.
+
+        Args:
+            title: Note title (used for filename)
+            category: Flat category name (e.g., "work-projects")
+            tags: Optional list of tags
+
+        Returns:
+            Newly created Note object
+        """
+        # Generate filename from title
+        filename = title.lower().replace(" ", "-") + ".md"
+        note_path = self.notes_dir / filename
+
+        # Check if note already exists
+        if note_path.exists():
+            raise NoteError(f"Note already exists: {note_path}")
+
+        # Create frontmatter
+        now = datetime.now()
+        post = frontmatter.Post(
+            f"# {title}\n\n",
+            category=category,
+            tags=tags or [],
+            created=now.isoformat(),
+            modified=now.isoformat(),
+        )
+
+        # Write file
+        try:
+            with open(note_path, "w") as f:
+                f.write(frontmatter.dumps(post))
+        except Exception as e:
+            raise NoteError(f"Failed to create note: {e}")
+
+        # Invalidate cache
+        self._cache = None
+
+        return Note.from_file(note_path)
+
+    def filter_by_category(self, category: str) -> list[Note]:
+        """Filter notes by category."""
+        all_notes = self.list_all_notes()
+        return [note for note in all_notes if note.category == category]
+
+    def filter_by_tags(self, tags: list[str]) -> list[Note]:
+        """Filter notes by tags (AND logic - note must have all tags)."""
+        all_notes = self.list_all_notes()
+        return [note for note in all_notes if all(tag in note.tags for tag in tags)]
+
+    def search_by_title(self, query: str) -> list[Note]:
+        """Search notes by title (case-insensitive)."""
+        all_notes = self.list_all_notes()
+        query_lower = query.lower()
+        return [note for note in all_notes if query_lower in note.title.lower()]
+
+    def get_last_edited_note(self) -> Optional[Note]:
+        """Get the most recently edited note."""
+        notes = self.list_all_notes()
+        return notes[0] if notes else None
+
+    def get_daily_note(self, date: Optional[datetime] = None) -> Note:
+        """
+        Get or create a daily journal note.
+
+        Args:
+            date: Date for the journal entry (default: today)
+
+        Returns:
+            Note object for the daily journal
+        """
+        if date is None:
+            date = datetime.now()
+
+        # Create journal directory if needed
+        journal_dir = self.notes_dir / "journal"
+        journal_dir.mkdir(exist_ok=True)
+
+        # Generate filename: YYYY-MM-DD.md
+        filename = date.strftime("%Y-%m-%d.md")
+        note_path = journal_dir / filename
+
+        # If note exists, load it
+        if note_path.exists():
+            return Note.from_file(note_path)
+
+        # Create new daily note
+        title = date.strftime("%Y-%m-%d")
+        post = frontmatter.Post(
+            f"# {title}\n\n## Notes\n\n",
+            category="journal",
+            tags=["journal", "daily"],
+            created=date.isoformat(),
+            modified=date.isoformat(),
+        )
+
+        # Write file
+        try:
+            with open(note_path, "w") as f:
+                f.write(frontmatter.dumps(post))
+        except Exception as e:
+            raise NoteError(f"Failed to create daily note: {e}")
+
+        return Note.from_file(note_path)
