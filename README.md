@@ -132,7 +132,8 @@ yana --daily
 # Manually sync notes (commit, pull, push)
 yana sync
 
-# Auto-sync happens on editor close if enabled in config
+# Auto-commit and auto-push happen after editing
+# If network unavailable, changes are committed locally with graceful message
 ```
 
 ## Configuration
@@ -199,34 +200,103 @@ modified: 2025-01-13T15:45:00
 - **created** (datetime): Auto-generated creation timestamp
 - **modified** (datetime): Auto-updated modification timestamp
 
-## Architecture
+## Troubleshooting
 
-YANA is built with modern Python 3.13 features and minimal dependencies:
+### Git Authentication Errors
 
-### Dependencies (5 lean libraries)
+If you see authentication errors when syncing:
 
-- **iterfzf** - FZF integration (bundles fzf binary)
-- **typer** - Modern CLI framework
-- **pyyaml** - YAML frontmatter parsing
-- **rich** - Beautiful terminal output
-- **watchdog** - File system monitoring
+```bash
+# For SSH (recommended)
+ssh-keygen -t ed25519 -C "your_email@example.com"
+ssh-add ~/.ssh/id_ed25519
+# Add the public key to your GitHub/GitLab account
 
-### Project Structure
-
+# For HTTPS
+# Configure git credential helper
+git config --global credential.helper store
 ```
-yana/
-├── src/yana/
-│   ├── cli.py       # Typer CLI commands
-│   ├── config.py    # Configuration management
-│   ├── notes.py     # Note operations
-│   ├── git.py       # Git integration
-│   ├── fzf.py       # FZF integration
-│   ├── editor.py    # Editor integration
-│   └── utils.py     # Utilities
-├── tests/           # Test suite
-├── CLAUDE.md        # Technical architecture docs
-├── TODO.md          # Implementation roadmap
-└── pyproject.toml   # Project configuration
+
+### Network Errors
+
+YANA provides helpful error messages for network issues:
+
+- **"Could not resolve hostname"** - Check your internet connection and DNS settings
+- **"Could not connect to remote"** - Verify your remote URL: `git remote -v`
+- **"SSL certificate error"** - Your system may have outdated CA certificates
+- **"Authentication failed"** - Check your SSH keys or HTTPS credentials
+
+### FZF Not Found
+
+YANA uses `iterfzf` which bundles the fzf binary, so you don't need to install fzf separately. If you still encounter issues:
+
+```bash
+# Reinstall yana
+pip uninstall yana
+pip install -e .
+```
+
+### Editor Not Opening
+
+If your editor doesn't open:
+
+1. **Check editor is installed**: `which nvim` (or your editor)
+2. **Set YANA_EDITOR**: `export YANA_EDITOR="nvim"`
+3. **For VS Code**: Use `code -w` to wait for window to close
+4. **For Sublime**: Use `subl -w` to wait for window to close
+
+YANA automatically handles wait flags for common editors.
+
+### Configuration Errors
+
+```bash
+# Check current configuration
+yana config
+
+# Verify notes directory exists
+ls -la ~/notes
+
+# Check config file
+cat ~/.config/yana/config.json
+
+# Override with environment variables
+export YANA_NOTES_DIR="$HOME/notes"
+export YANA_EDITOR="nvim"
+```
+
+### Sync Conflicts
+
+If git sync conflicts occur:
+
+1. YANA creates `.conflict.md` backup files with remote versions
+2. Your local version remains in the main file
+3. Manually resolve conflicts and run:
+
+```bash
+yana sync
+```
+
+### Quiet Mode
+
+To suppress output messages (useful for scripts):
+
+```bash
+yana --quiet
+yana new "Note" category --quiet
+yana sync --quiet
+```
+
+### Logs
+
+Check logs for detailed error information:
+
+```bash
+# View logs
+tail -f ~/.config/yana/yana.log
+
+# Enable debug logging
+export YANA_LOG_LEVEL="DEBUG"
+yana --daily
 ```
 
 ## Development
@@ -270,40 +340,6 @@ pytest tests/test_notes.py
 # Run with verbose output
 pytest -v
 ```
-
-## Roadmap
-
-### Phase 1: Core MVP ✅
-- [x] Project structure
-- [x] Configuration system
-- [x] Note management
-- [x] FZF integration skeleton
-- [x] Editor integration skeleton
-- [x] Git integration skeleton
-- [x] CLI commands skeleton
-
-### Phase 2: Core Functionality (In Progress)
-- [ ] Complete note CRUD operations
-- [ ] Complete FZF browsing
-- [ ] Complete editor integration
-- [ ] Complete git sync workflow
-- [ ] Daily notes
-- [ ] Category filtering
-- [ ] Last edited note
-
-### Phase 3: Advanced Features
-- [ ] Content search (ripgrep/grep)
-- [ ] Tag filtering
-- [ ] Templates for new notes
-- [ ] File watching
-- [ ] Statistics command
-
-### Phase 4: Polish
-- [ ] Gruvbox colors theme
-- [ ] Nerd fonts support
-- [ ] Rich markdown rendering
-- [ ] File tree view
-- [ ] Welcome dashboard
 
 See [TODO.md](TODO.md) for the complete task list with granular breakdown.
 

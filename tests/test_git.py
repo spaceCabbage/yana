@@ -368,3 +368,130 @@ def test_git_sync_result_dataclass():
     assert result.success is True
     assert result.message == "Sync completed"
     assert len(result.conflicts) == 2
+
+
+# Tests for new is_git_enabled() functionality
+
+
+def test_is_git_available():
+    """Test is_git_available() detects git on system."""
+    # This should return True on any system with git installed
+    assert GitSync.is_git_available() is True
+
+
+@patch("subprocess.run")
+def test_is_git_available_no_git(mock_run):
+    """Test is_git_available() returns False when git not found."""
+    mock_run.side_effect = FileNotFoundError()
+
+    assert GitSync.is_git_available() is False
+
+
+@patch("subprocess.run")
+def test_is_git_available_timeout(mock_run):
+    """Test is_git_available() returns False on timeout."""
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="git --version", timeout=5)
+
+    assert GitSync.is_git_available() is False
+
+
+def test_is_git_repo_valid(git_repo):
+    """Test is_git_repo() returns True for valid git repo."""
+    assert GitSync.is_git_repo(git_repo) is True
+
+
+def test_is_git_repo_invalid(temp_notes_dir):
+    """Test is_git_repo() returns False for non-git directory."""
+    assert GitSync.is_git_repo(temp_notes_dir) is False
+
+
+def test_is_git_enabled_valid(git_repo):
+    """Test is_git_enabled() returns True when git available and valid repo."""
+    assert GitSync.is_git_enabled(git_repo) is True
+
+
+def test_is_git_enabled_not_a_repo(temp_notes_dir):
+    """Test is_git_enabled() returns False for non-git directory."""
+    assert GitSync.is_git_enabled(temp_notes_dir) is False
+
+
+@patch.object(GitSync, "is_git_available")
+def test_is_git_enabled_no_git(mock_available, git_repo):
+    """Test is_git_enabled() returns False when git not available."""
+    mock_available.return_value = False
+
+    assert GitSync.is_git_enabled(git_repo) is False
+
+
+# Tests for network error detection
+
+
+@patch("subprocess.run")
+def test_network_error_dns_failure(mock_run, git_repo):
+    """Test network error detection for DNS failures."""
+    git_sync = GitSync(git_repo)
+
+    mock_run.return_value = MagicMock(
+        returncode=128,
+        stdout="",
+        stderr="fatal: Could not resolve host: github.com",
+    )
+
+    with pytest.raises(GitError, match="Could not resolve hostname"):
+        git_sync.push()
+
+
+@patch("subprocess.run")
+def test_network_error_connection_refused(mock_run, git_repo):
+    """Test network error detection for connection refused."""
+    git_sync = GitSync(git_repo)
+
+    mock_run.return_value = MagicMock(
+        returncode=128,
+        stdout="",
+        stderr="fatal: Connection refused",
+    )
+
+    with pytest.raises(GitError, match="Could not connect to remote"):
+        git_sync.push()
+
+
+@patch("subprocess.run")
+def test_network_error_ssl_certificate(mock_run, git_repo):
+    """Test network error detection for SSL certificate issues."""
+    git_sync = GitSync(git_repo)
+
+    mock_run.return_value = MagicMock(
+        returncode=128,
+        stdout="",
+        stderr="fatal: SSL certificate problem: certificate verify failed",
+    )
+
+    with pytest.raises(GitError, match="SSL certificate error"):
+        git_sync.pull()
+
+
+@patch("subprocess.run")
+def test_network_error_authentication_failed(mock_run, git_repo):
+    """Test network error detection for authentication failures."""
+    git_sync = GitSync(git_repo)
+
+    mock_run.return_value = MagicMock(
+        returncode=128,
+        stdout="",
+        stderr="fatal: Authentication failed for 'https://github.com/user/repo.git'",
+    )
+
+    with pytest.raises(GitError, match="Authentication error"):
+        git_sync.push()
+
+
+@patch("subprocess.run")
+def test_network_error_timeout_message(mock_run, git_repo):
+    """Test network error provides helpful message on timeout."""
+    git_sync = GitSync(git_repo)
+
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="git pull", timeout=30)
+
+    with pytest.raises(GitError, match="network issue"):
+        git_sync.pull()

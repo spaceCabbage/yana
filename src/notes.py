@@ -4,12 +4,15 @@ Note management and operations.
 
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import frontmatter
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from src.utils import NoteError, logger
 
@@ -576,15 +579,17 @@ class NoteManager:
 
                 for i, line in enumerate(lines, start=1):
                     if pattern.search(line):
-                        # Add match with context
+                        # Add match with context lines before and after
                         # Calculate the range of lines to include (1-indexed)
+                        # Example: context_lines=2, match on line 10 → include lines 8-12
                         start_line = max(1, i - context_lines)
                         end_line = min(len(lines), i + context_lines)
 
-                        # Add all lines in range (avoiding duplicates)
+                        # Add all lines in range (avoiding duplicates from overlapping matches)
                         for line_num in range(start_line, end_line + 1):
                             if line_num not in matched_lines:
                                 matched_lines.add(line_num)
+                                # Convert to 0-indexed for array access
                                 matches.append((line_num, lines[line_num - 1].rstrip()))
 
                 if matches:
@@ -600,10 +605,19 @@ class NoteManager:
     def _parse_grep_output(
         self, output: str
     ) -> list[tuple[Note, list[tuple[int, str]]]]:
-        """Parse grep/ripgrep output into structured results."""
+        """
+        Parse grep/ripgrep output into structured results.
+
+        Grep output formats:
+        - Match lines: path:line_number:content
+        - Context lines: path-line_number-content
+
+        This method parses both formats and groups matches by file.
+        """
         if not output.strip():
             return []
 
+        # Group matches by file path
         results: dict[Path, list[tuple[int, str]]] = {}
 
         for line in output.split("\n"):
@@ -669,3 +683,172 @@ class NoteManager:
                 continue
 
         return final_results
+
+
+# ============================================================================
+# File Watching
+# ============================================================================
+
+
+class NoteWatcher(FileSystemEventHandler):
+    """
+    Watches note directory for external changes and triggers callbacks.
+
+    Implements debouncing to avoid rapid repeated events.
+    Only watches .md files for changes.
+    """
+
+    def __init__(
+        self,
+        callback: Callable[[Path], None],
+        debounce_seconds: float = 2.0,
+    ) -> None:
+        """
+        Initialize the note watcher.
+
+        Args:
+            callback: Function to call when a note is modified (receives file path)
+            debounce_seconds: Time to wait before triggering callback (default: 2.0s)
+        """
+        super().__init__()
+        self.callback = callback
+        self.debounce_seconds = debounce_seconds
+        self._last_event_times: dict[str, float] = {}
+        logger.debug(f"NoteWatcher initialized with {debounce_seconds}s debounce")
+
+    def on_modified(self, event) -> None:
+        """
+        Handle file modification events.
+
+        Args:
+            event: Watchdog file system event
+        """
+        # Ignore directory events
+        if event.is_directory:
+            return
+
+        # Only watch .md files
+        file_path = Path(event.src_path)
+        if file_path.suffix != ".md":
+            return
+
+        # Implement debouncing
+        now = time.time()
+        last_event_time = self._last_event_times.get(event.src_path, 0)
+
+        if now - last_event_time < self.debounce_seconds:
+            logger.debug(f"Debouncing modification event for {file_path.name}")
+            return
+
+        # Update last event time
+        self._last_event_times[event.src_path] = now
+
+        logger.info(f"Detected modification: {file_path}")
+
+        # Trigger callback
+        try:
+            self.callback(file_path)
+        except Exception as e:
+            logger.error(f"Error in watcher callback for {file_path}: {e}")
+
+    def on_created(self, event) -> None:
+        """
+        Handle file creation events.
+
+        Args:
+            event: Watchdog file system event
+        """
+        # Treat creation same as modification
+        self.on_modified(event)
+
+
+class NoteWatcherManager:
+    """
+    Manages the file system observer for note watching.
+
+    Provides start/stop controls and error handling.
+    """
+
+    def __init__(
+        self,
+        notes_dir: Path,
+        callback: Callable[[Path], None],
+        debounce_seconds: float = 2.0,
+    ) -> None:
+        """
+        Initialize the watcher manager.
+
+        Args:
+            notes_dir: Directory to watch
+            callback: Function to call when a note changes
+            debounce_seconds: Debounce time in seconds
+        """
+        self.notes_dir = notes_dir
+        self.callback = callback
+        self.debounce_seconds = debounce_seconds
+        self.observer: Optional[Observer] = None
+        self.event_handler: Optional[NoteWatcher] = None
+
+    def start(self) -> None:
+        """
+        Start watching the notes directory.
+
+        Raises:
+            NoteError: If watcher fails to start
+        """
+        if self.observer is not None:
+            logger.warning("Watcher already running")
+            return
+
+        try:
+            logger.info(f"Starting note watcher for {self.notes_dir}")
+
+            # Create event handler
+            self.event_handler = NoteWatcher(
+                callback=self.callback,
+                debounce_seconds=self.debounce_seconds,
+            )
+
+            # Create and start observer
+            self.observer = Observer()
+            self.observer.schedule(
+                self.event_handler,
+                str(self.notes_dir),
+                recursive=True,
+            )
+            self.observer.start()
+
+            logger.info("Note watcher started successfully")
+
+        except Exception as e:
+            raise NoteError(f"Failed to start note watcher: {e}")
+
+    def stop(self) -> None:
+        """Stop the watcher if running."""
+        if self.observer is None:
+            logger.debug("Watcher not running")
+            return
+
+        try:
+            logger.info("Stopping note watcher")
+            self.observer.stop()
+            self.observer.join(timeout=5)
+            self.observer = None
+            self.event_handler = None
+            logger.info("Note watcher stopped")
+
+        except Exception as e:
+            logger.error(f"Error stopping watcher: {e}")
+
+    def is_running(self) -> bool:
+        """Check if watcher is currently running."""
+        return self.observer is not None and self.observer.is_alive()
+
+    def __enter__(self):
+        """Context manager entry - start watching."""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - stop watching."""
+        self.stop()

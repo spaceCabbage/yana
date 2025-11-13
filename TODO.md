@@ -106,7 +106,7 @@
 ### Git Module (git.py)
 - [x] Create GitSync class
 - [x] Implement init_repo(path) - check if git repo exists
-- [ ] Implement is_git_enabled() - check config + repo existence
+- [x] Implement is_git_enabled() - check config + repo existence
 - [x] Implement has_local_changes() - check git status
 - [x] Implement has_remote_changes() - check if behind origin
 - [x] Implement commit_file(path, message) - single file commit
@@ -118,12 +118,14 @@
 - [x] Implement handle_conflicts() - detect and create .conflict backups
 - [x] Add proper error handling for git commands
 - [x] Add timeout for git operations
-- [ ] Add network error detection
+- [x] Add network error detection
 
 ### Auto-Sync Workflow
 - [x] Implement sync_before_edit() - pull if needed
-- [x] Implement sync_after_edit(modified) - commit if modified
+- [x] Implement sync_after_edit(modified) - commit if modified, push to remote
 - [x] Add auto-commit message generation
+- [x] Add auto-push with network error handling
+- [x] Add graceful network error messages
 - [ ] Test sync with no remote
 - [ ] Test sync with conflicts
 - [ ] Test sync with network failure
@@ -158,15 +160,15 @@
 
 
 ### Watchdog Integration (notes.py or separate module)
-- [ ] Create NoteWatcher class (FileSystemEventHandler)
-- [ ] Implement on_modified() handler
-- [ ] Add debouncing for rapid changes (2s default)
-- [ ] Filter for .md files only
-- [ ] Trigger sync callback on changes
-- [ ] Add watch_enabled config option
-- [ ] Start/stop observer based on config
-- [ ] Handle watch errors gracefully
-- [ ] Test with external editor changes
+- [x] Create NoteWatcher class (FileSystemEventHandler)
+- [x] Implement on_modified() handler
+- [x] Add debouncing for rapid changes (2s default)
+- [x] Filter for .md files only
+- [x] Trigger sync callback on changes
+- [x] Add watch_enabled config option
+- [x] Start/stop observer based on config (via NoteWatcherManager)
+- [x] Handle watch errors gracefully
+- [ ] Test with external editor changes (manual testing recommended)
 
 ## Phase 9: Search & Filtering
 
@@ -195,25 +197,25 @@
 - [x] Color code errors (red), warnings (yellow), info (blue)
 
 ### User Feedback
-- [ ] Add success messages for operations
-- [ ] Show spinner for slow git operations
-- [ ] Add progress bars for long operations
-- [ ] Show git sync status
-- [ ] Add quiet mode (--quiet/-q)
+- [x] Add success messages for operations
+- [x] Show spinner for slow git operations (Rich status with spinner)
+- [ ] Add progress bars for long operations (not needed for current operations)
+- [x] Show git sync status
+- [x] Add quiet mode (--quiet/-q)
 
 ### Documentation
 - [x] Add docstrings to all functions
 - [x] Add type hints everywhere
-- [ ] Add inline comments for complex logic
+- [x] Add inline comments for complex logic
 - [x] Create comprehensive README examples
-- [ ] Add troubleshooting section to README
+- [x] Add troubleshooting section to README
 - [x] Add configuration examples
 
 ### Testing
 - [x] Write unit tests for config loading (14 tests - 100% pass)
 - [x] Write unit tests for note operations (56 tests - 100% pass) **+10 CRUD, +13 search, +12 filtering tests**
 - [x] Write unit tests for frontmatter parsing
-- [x] Write integration tests for git sync (22 tests - 100% pass)
+- [x] Write integration tests for git sync (35 tests - 100% pass) **+11 is_git_enabled + network error tests**
 - [x] Write integration tests for FZF (20 tests - 100% pass)
 - [x] Add test fixtures for sample notes
 - [x] Write unit tests for editor integration (11 tests - 100% pass)

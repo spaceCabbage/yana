@@ -30,6 +30,42 @@ class GitSync:
         self.repo_path = repo_path
         self._check_git_repo()
 
+    @staticmethod
+    def is_git_available() -> bool:
+        """Check if git command is available on the system."""
+        try:
+            result = subprocess.run(
+                ["git", "--version"],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+
+    @staticmethod
+    def is_git_repo(path: Path) -> bool:
+        """Check if the path is a git repository."""
+        git_dir = path / ".git"
+        return git_dir.exists() and git_dir.is_dir()
+
+    @staticmethod
+    def is_git_enabled(path: Path) -> bool:
+        """
+        Check if git operations can be performed.
+
+        Returns True only if:
+        1. Git command is available on the system
+        2. The path is a valid git repository
+
+        Args:
+            path: Path to check for git repository
+
+        Returns:
+            bool: True if git is available and path is a repo
+        """
+        return GitSync.is_git_available() and GitSync.is_git_repo(path)
+
     def _check_git_repo(self) -> None:
         """Check if the path is a valid git repository."""
         git_dir = self.repo_path / ".git"
@@ -67,17 +103,62 @@ class GitSync:
             )
 
             if check and result.returncode != 0:
-                raise GitError(
-                    f"Git command failed: git {' '.join(args)}\n"
-                    f"Exit code: {result.returncode}\n"
-                    f"Error: {result.stderr}"
-                )
+                # Detect network-related errors and provide helpful messages
+                error_msg = result.stderr.lower()
+
+                if any(
+                    phrase in error_msg
+                    for phrase in [
+                        "could not resolve host",
+                        "temporary failure in name resolution",
+                    ]
+                ):
+                    raise GitError(
+                        f"Network error: Could not resolve hostname.\n"
+                        f"Check your internet connection and DNS settings."
+                    )
+                elif any(
+                    phrase in error_msg
+                    for phrase in [
+                        "connection refused",
+                        "connection timed out",
+                        "network is unreachable",
+                    ]
+                ):
+                    raise GitError(
+                        f"Network error: Could not connect to remote repository.\n"
+                        f"Check your internet connection and remote URL."
+                    )
+                elif (
+                    "ssl certificate problem" in error_msg
+                    or "certificate verify failed" in error_msg
+                ):
+                    raise GitError(
+                        f"SSL certificate error: Could not verify remote certificate.\n"
+                        f"Try: git config --global http.sslVerify false (not recommended for production)"
+                    )
+                elif (
+                    "authentication failed" in error_msg
+                    or "permission denied" in error_msg
+                ):
+                    raise GitError(
+                        f"Authentication error: Could not authenticate with remote.\n"
+                        f"Check your SSH keys or HTTPS credentials."
+                    )
+                else:
+                    # Generic error
+                    raise GitError(
+                        f"Git command failed: git {' '.join(args)}\n"
+                        f"Exit code: {result.returncode}\n"
+                        f"Error: {result.stderr}"
+                    )
 
             return result
 
         except subprocess.TimeoutExpired:
             raise GitError(
-                f"Git command timed out after {timeout}s: git {' '.join(args)}"
+                f"Git command timed out after {timeout}s: git {' '.join(args)}\n"
+                f"This may indicate a network issue. Check your internet connection."
             )
         except Exception as e:
             raise GitError(f"Failed to run git command: {e}")
@@ -207,6 +288,12 @@ class GitSync:
         """
         Perform a full sync: stash, pull, pop, commit, push.
 
+        Workflow:
+        1. Stash local changes (if any) to avoid conflicts
+        2. Pull remote changes with rebase
+        3. Pop stashed changes back on top
+        4. Handle any conflicts that arise
+
         Returns:
             SyncResult with operation status
         """
@@ -214,17 +301,21 @@ class GitSync:
 
         try:
             # 1. Stash local changes if any
+            # This temporarily saves uncommitted changes so we can pull cleanly
             if self.has_local_changes():
                 stashed = self.stash_changes()
 
             # 2. Pull remote changes
+            # Fetch and rebase local commits on top of remote commits
             if self.has_remote_changes():
                 self.pull()
 
             # 3. Pop stash if we stashed
+            # Reapply the uncommitted changes we saved earlier
             if stashed:
                 result = self.pop_stash()
                 if not result.success:
+                    # Conflicts occurred - create .conflict backups
                     self.handle_conflicts()
                     return result
 

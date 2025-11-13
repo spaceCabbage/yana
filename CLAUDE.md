@@ -212,11 +212,13 @@ cat {}
 
 **Strategy: Safe and Simple**
 
-**Auto-commit (when enabled):**
+**Auto-commit and auto-push:**
 1. User opens note in editor (blocking)
 2. On editor exit, check if file modified
 3. If modified: `git add <file> && git commit -m "Update: <filename>"`
-4. If `git_auto_push=true`: `git push`
+4. Always attempt: `git push`
+5. If push fails due to network error: Show graceful message "Committed locally, but could not push to remote (network issue)"
+6. If push fails due to other error (auth, conflicts): Show warning with error details
 
 **Manual Sync Workflow:**
 ```python

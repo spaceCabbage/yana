@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.status import Status
 
 from src import __version__
 from src.config import ConfigError, load_config
@@ -24,6 +25,9 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+# Global quiet mode flag
+_quiet_mode = False
 
 # Initialize logging on module import
 setup_logging()
@@ -42,18 +46,27 @@ def _sync_before_edit(git_sync: GitSync) -> None:
     try:
         logger.debug("Checking for remote changes")
         if git_sync.has_remote_changes():
-            console.print("[blue]Pulling remote changes...[/blue]")
-            logger.info("Pulling remote changes")
-            git_sync.pull()
-            console.print("[green]✓[/green] Synced with remote")
+            if not _quiet_mode:
+                # Use spinner for git pull
+                with console.status(
+                    "[blue]Pulling remote changes...[/blue]", spinner="dots"
+                ):
+                    logger.info("Pulling remote changes")
+                    git_sync.pull()
+                console.print("[green]✓[/green] Synced with remote")
+            else:
+                # Quiet mode: no spinner, just execute
+                logger.info("Pulling remote changes")
+                git_sync.pull()
             logger.info("Successfully synced with remote")
     except GitError as e:
         logger.warning(f"Could not pull changes: {e}")
-        console.print(f"[yellow]Warning: Could not pull changes: {e}[/yellow]")
+        if not _quiet_mode:
+            console.print(f"[yellow]Warning: Could not pull changes: {e}[/yellow]")
 
 
 def _sync_after_edit(git_sync: GitSync, note_path: Path, was_modified: bool) -> None:
-    """Commit changes after editing."""
+    """Commit changes after editing and push to remote."""
     if not was_modified:
         logger.debug("No modifications detected, skipping commit")
         return
@@ -61,13 +74,66 @@ def _sync_after_edit(git_sync: GitSync, note_path: Path, was_modified: bool) -> 
     try:
         # Commit the file
         logger.info(f"Committing changes to {note_path}")
-        git_sync.commit_file(note_path)
-        console.print(f"[green]✓[/green] Changes committed: {note_path.name}")
+
+        if not _quiet_mode:
+            with console.status("[blue]Committing changes...[/blue]", spinner="dots"):
+                git_sync.commit_file(note_path)
+            console.print(f"[green]✓[/green] Changes committed: {note_path.name}")
+        else:
+            git_sync.commit_file(note_path)
+
         logger.info(f"Successfully committed {note_path.name}")
+
+        # Always attempt to push after commit
+        try:
+            logger.info("Pushing changes to remote")
+            if not _quiet_mode:
+                with console.status(
+                    "[blue]Pushing to remote...[/blue]", spinner="dots"
+                ):
+                    git_sync.push()
+                console.print(f"[green]✓[/green] Pushed to remote")
+            else:
+                git_sync.push()
+
+            logger.info("Successfully pushed to remote")
+
+        except GitError as push_error:
+            # Check if it's a network-related error
+            error_msg = str(push_error).lower()
+            is_network_error = any(
+                phrase in error_msg
+                for phrase in [
+                    "network error",
+                    "could not resolve",
+                    "could not connect",
+                    "connection refused",
+                    "connection timed out",
+                    "network is unreachable",
+                    "timed out",
+                ]
+            )
+
+            if is_network_error:
+                logger.warning(
+                    f"Could not push to remote (network issue): {push_error}"
+                )
+                if not _quiet_mode:
+                    console.print(
+                        f"[yellow]Committed locally, but could not push to remote (network issue)[/yellow]"
+                    )
+            else:
+                # Other git errors (auth, conflicts, etc.)
+                logger.error(f"Could not push to remote: {push_error}")
+                if not _quiet_mode:
+                    console.print(
+                        f"[yellow]Warning: Could not push to remote: {push_error}[/yellow]"
+                    )
 
     except GitError as e:
         logger.error(f"Could not commit changes: {e}")
-        console.print(f"[yellow]Warning: Could not commit changes: {e}[/yellow]")
+        if not _quiet_mode:
+            console.print(f"[yellow]Warning: Could not commit changes: {e}[/yellow]")
 
 
 @app.callback()
@@ -108,6 +174,7 @@ def main(
     ),
     daily: bool = typer.Option(False, "--daily", "-d", help="Open today's journal"),
     last: bool = typer.Option(False, "--last", "-l", help="Open last edited note"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output messages"),
 ) -> None:
     """
     Browse and manage your markdown notes with FZF.
@@ -127,6 +194,10 @@ def main(
         yana --last                 # Open last edited note
     """
     try:
+        # Set global quiet mode
+        global _quiet_mode
+        _quiet_mode = quiet
+
         logger.debug("Loading configuration")
         config = load_config()
         logger.debug(f"Config loaded: notes_dir={config.notes_dir}")
@@ -240,24 +311,28 @@ def main(
             # Apply category filter
             if category:
                 filtered_notes = [n for n in filtered_notes if n.category == category]
-                logger.debug(f"Filtered by category '{category}': {len(filtered_notes)} notes")
+                logger.debug(
+                    f"Filtered by category '{category}': {len(filtered_notes)} notes"
+                )
 
             # Apply tag filter
             if tag:
                 if all_tags:
                     # AND logic: note must have ALL tags
                     filtered_notes = [
-                        n for n in filtered_notes
-                        if all(t in n.tags for t in tag)
+                        n for n in filtered_notes if all(t in n.tags for t in tag)
                     ]
-                    logger.debug(f"Filtered by all tags {tag}: {len(filtered_notes)} notes")
+                    logger.debug(
+                        f"Filtered by all tags {tag}: {len(filtered_notes)} notes"
+                    )
                 else:
                     # OR logic: note must have ANY tag
                     filtered_notes = [
-                        n for n in filtered_notes
-                        if any(t in n.tags for t in tag)
+                        n for n in filtered_notes if any(t in n.tags for t in tag)
                     ]
-                    logger.debug(f"Filtered by any tag {tag}: {len(filtered_notes)} notes")
+                    logger.debug(
+                        f"Filtered by any tag {tag}: {len(filtered_notes)} notes"
+                    )
 
             # Apply date filters
             if since or before:
@@ -266,14 +341,17 @@ def main(
                     end_date = datetime.strptime(before, "%Y-%m-%d") if before else None
 
                     filtered_notes = [
-                        n for n in filtered_notes
+                        n
+                        for n in filtered_notes
                         if (not start_date or n.modified_at >= start_date)
                         and (not end_date or n.modified_at <= end_date)
                     ]
                     logger.debug(f"Filtered by date range: {len(filtered_notes)} notes")
                 except ValueError as e:
                     console.print(f"[red]Invalid date format:[/red] {e}")
-                    console.print("[yellow]Use YYYY-MM-DD format (e.g., 2025-01-01)[/yellow]")
+                    console.print(
+                        "[yellow]Use YYYY-MM-DD format (e.g., 2025-01-01)[/yellow]"
+                    )
                     raise typer.Exit(1)
 
             # Check if filtering resulted in no notes
@@ -327,6 +405,7 @@ def new(
     title: str = typer.Argument(..., help="Note title"),
     category: str = typer.Argument(..., help="Note category"),
     tags: Optional[list[str]] = typer.Option(None, "--tag", "-t", help="Add tags"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output messages"),
 ) -> None:
     """
     Create a new note with frontmatter.
@@ -338,6 +417,10 @@ def new(
         yana new "Daily Standup" team-sync --tag meeting --tag standup
     """
     try:
+        # Set global quiet mode
+        global _quiet_mode
+        _quiet_mode = quiet
+
         logger.debug("Loading configuration for new note")
         config = load_config()
         note_manager = NoteManager(config.notes_dir)
@@ -355,10 +438,12 @@ def new(
         logger.info(
             f"Creating new note: title={title}, category={category}, tags={tags}"
         )
-        console.print(f"[blue]Creating note:[/blue] {title}")
+        if not _quiet_mode:
+            console.print(f"[blue]Creating note:[/blue] {title}")
         note = note_manager.create_note(title, category, tags)
         logger.info(f"Note created: {note.path}")
-        console.print(f"[green]✓[/green] Created: {note.path}")
+        if not _quiet_mode:
+            console.print(f"[green]✓[/green] Created: {note.path}")
 
         # Sync before editing
         if git_sync:
@@ -370,7 +455,7 @@ def new(
         # Sync after editing
         if git_sync:
             _sync_after_edit(git_sync, note.path, True)
-        else:
+        elif not _quiet_mode:
             console.print(f"[green]✓[/green] Note ready: {note.path}")
 
     except YanaError as e:
@@ -382,7 +467,9 @@ def new(
 
 
 @app.command()
-def sync() -> None:
+def sync(
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output messages"),
+) -> None:
     """
     Manually sync notes with git (commit, pull, push).
 
@@ -392,12 +479,17 @@ def sync() -> None:
         yana sync    # Sync all changes
     """
     try:
+        # Set global quiet mode
+        global _quiet_mode
+        _quiet_mode = quiet
+
         logger.debug("Starting manual sync")
         config = load_config()
 
         if not config.git_enabled:
             logger.info("Git sync is disabled in config")
-            console.print("[yellow]Git sync is disabled in config[/yellow]")
+            if not _quiet_mode:
+                console.print("[yellow]Git sync is disabled in config[/yellow]")
             raise typer.Exit(0)
 
         # Initialize git
@@ -405,23 +497,69 @@ def sync() -> None:
             git_sync = GitSync(config.notes_dir)
         except GitError as e:
             logger.error(f"Git initialization failed: {e}")
-            console.print(f"[red]Git Error:[/red] {e}")
+            if not _quiet_mode:
+                console.print(f"[red]Git Error:[/red] {e}")
             raise typer.Exit(1)
 
         # Perform sync
         logger.info("Performing git sync")
-        console.print("[blue]Syncing notes...[/blue]")
-        result = git_sync.sync()
+        if not _quiet_mode:
+            with console.status("[blue]Syncing notes...[/blue]", spinner="dots"):
+                result = git_sync.sync()
+        else:
+            result = git_sync.sync()
+
         logger.debug(f"Sync result: success={result.success}, message={result.message}")
 
         if result.success:
-            console.print(f"[green]✓[/green] {result.message}")
+            if not _quiet_mode:
+                console.print(f"[green]✓[/green] {result.message}")
 
-            # Always push when manually syncing
-            if git_sync.has_local_changes():
-                console.print("[blue]Pushing to remote...[/blue]")
-                git_sync.push()
-                console.print("[green]✓[/green] Pushed to remote")
+            # Always attempt to push after successful sync
+            try:
+                logger.info("Pushing changes to remote")
+                if not _quiet_mode:
+                    with console.status(
+                        "[blue]Pushing to remote...[/blue]", spinner="dots"
+                    ):
+                        git_sync.push()
+                    console.print("[green]✓[/green] Pushed to remote")
+                else:
+                    git_sync.push()
+
+                logger.info("Successfully pushed to remote")
+
+            except GitError as push_error:
+                # Check if it's a network-related error
+                error_msg = str(push_error).lower()
+                is_network_error = any(
+                    phrase in error_msg
+                    for phrase in [
+                        "network error",
+                        "could not resolve",
+                        "could not connect",
+                        "connection refused",
+                        "connection timed out",
+                        "network is unreachable",
+                        "timed out",
+                    ]
+                )
+
+                if is_network_error:
+                    logger.warning(
+                        f"Could not push to remote (network issue): {push_error}"
+                    )
+                    if not _quiet_mode:
+                        console.print(
+                            f"[yellow]Synced locally, but could not push to remote (network issue)[/yellow]"
+                        )
+                else:
+                    # Other git errors (auth, conflicts, etc.)
+                    logger.error(f"Could not push to remote: {push_error}")
+                    if not _quiet_mode:
+                        console.print(
+                            f"[yellow]Warning: Could not push to remote: {push_error}[/yellow]"
+                        )
         else:
             console.print(f"[red]Sync failed:[/red] {result.message}")
             if result.conflicts:
