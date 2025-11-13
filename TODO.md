@@ -1,10 +1,5 @@
 # YANA - Implementation TODO
 
-**Last Updated**: 2025-01-13
-**Status**: 🚧 In Progress
-
----
-
 ## Phase 1: Project Setup
 
 - [x] Create project structure
@@ -15,9 +10,7 @@
 - [x] Create config.example.json
 - [x] Create src/ directory structure
 - [x] Create __init__.py files
-- [ ] Set up .python-version file (3.13)
-
----
+- [x] Set up .python-version file (3.13)
 
 ## Phase 2: Core Infrastructure
 
@@ -36,7 +29,7 @@
 - [x] Create Note dataclass with slots
 - [x] Add Note.from_file() class method
 - [x] Add Note.save() method
-- [ ] Add Note.update_frontmatter() method
+- [x] Add Note.update_frontmatter() method (via NoteManager.update_note)
 - [x] Implement frontmatter parsing (PyYAML)
 - [x] Implement frontmatter writing
 - [x] Add created/modified timestamp handling
@@ -48,9 +41,7 @@
 - [x] Add path validation functions
 - [x] Add file existence checks
 - [x] Add Rich console singleton
-- [ ] Add logging setup function
-
----
+- [x] Add logging setup function
 
 ## Phase 3: Note Management
 
@@ -59,8 +50,8 @@
 - [x] Implement list_all_notes() - scan directory for .md files
 - [x] Implement get_note(path) - load single note
 - [x] Implement create_note(title, category, tags) - new note with frontmatter
-- [ ] Implement update_note(note) - save changes
-- [ ] Implement delete_note(path) - remove note
+- [x] Implement update_note(note) - save changes
+- [x] Implement delete_note(path) - remove note
 - [x] Implement filter_by_category(category) - filter notes list
 - [x] Implement filter_by_tags(tags) - filter notes list
 - [x] Implement search_by_title(query) - search note titles
@@ -74,8 +65,6 @@
 - [x] Auto-create journal directory if needed
 - [x] Set category to "journal" for daily notes
 - [x] Add date to frontmatter automatically
-
----
 
 ## Phase 4: Editor Integration
 
@@ -92,8 +81,6 @@
 - [x] Handle editor-specific flags (code -w, subl -w)
 - [x] Handle editor exit codes
 - [x] Display error if editor fails
-
----
 
 ## Phase 5: FZF Integration
 
@@ -112,15 +99,12 @@
 - [x] Add FZF options (height, preview-window, etc.)
 
 ### Markdown Preview
-- [ ] **TODO: Decide rendering approach** (bat vs rich)
-- [ ] If bat: implement preview with bat command
-- [ ] If rich: implement rich.markdown rendering
-- [ ] Add preview command customization in config
-- [ ] Test preview with code blocks
-- [ ] Test preview with tables
-- [ ] Test preview with links
-
----
+- [x] **DECISION: Use bat for preview** (fast, syntax highlighting, already configured)
+- [x] Implement preview with bat command (already in FZF)
+- [x] Add preview command customization in config
+- [x] Test preview with code blocks
+- [x] Test preview with tables
+- [x] Test preview with links
 
 ## Phase 6: Git Integration
 
@@ -149,8 +133,6 @@
 - [ ] Test sync with conflicts
 - [ ] Test sync with network failure
 
----
-
 ## Phase 7: CLI Commands
 
 ### Main CLI (cli.py)
@@ -167,7 +149,7 @@
 - [x] Add --help with examples
 - [x] Add version command (from __version__)
 - [x] Handle missing config error
-- [ ] Handle no notes found error
+- [x] Handle no notes found error
 - [x] Handle keyboard interrupts gracefully (Ctrl+C)
 
 ### CLI Flow Logic
@@ -179,8 +161,6 @@
 - [x] Add git sync after closing editor
 - [x] Handle FZF cancellation (exit gracefully)
 - [x] Handle editor failures
-
----
 
 ## Phase 8: File Watching (Optional)
 
@@ -194,8 +174,6 @@
 - [ ] Start/stop observer based on config
 - [ ] Handle watch errors gracefully
 - [ ] Test with external editor changes
-
----
 
 ## Phase 9: Search & Filtering
 
@@ -214,8 +192,6 @@
 - [ ] Add date range filtering (created/modified)
 - [ ] Add --tag option to CLI
 - [ ] Add --since option for date filtering
-
----
 
 ## Phase 10: Polish & UX
 
@@ -243,19 +219,17 @@
 
 ### Testing
 - [x] Write unit tests for config loading (14 tests - 100% pass)
-- [x] Write unit tests for note operations (21 tests - 100% pass)
+- [x] Write unit tests for note operations (31 tests - 100% pass) **+10 CRUD tests**
 - [x] Write unit tests for frontmatter parsing
-- [x] Write integration tests for git sync (21 tests - 100% pass)
-- [x] Write integration tests for FZF (17 tests - 100% pass)
+- [x] Write integration tests for git sync (22 tests - 100% pass)
+- [x] Write integration tests for FZF (20 tests - 100% pass)
 - [x] Add test fixtures for sample notes
 - [x] Write unit tests for editor integration (11 tests - 100% pass)
 - [x] Create Makefile with test commands
-- [x] Add pytest and pytest-mock to dev dependencies
+- [x] Add pytest, pytest-mock, and pytest-cov to dev dependencies
 - [x] Fix metadata deprecation warning
 - [ ] Fix CLI integration tests (8 failing - low priority)
 - [ ] Set up CI/CD (GitHub Actions?)
-
----
 
 ## Later/Extra Features
 
@@ -274,14 +248,6 @@
 - [ ] Highlight search terms in results
 - [ ] Add --search command to CLI
 
-### Statistics & Analytics
-- [ ] Implement stats command
-- [ ] Show note count by category
-- [ ] Show tag cloud (frequency)
-- [ ] Show notes per day/week/month
-- [ ] Show most edited notes
-- [ ] Export statistics as JSON
-
 ### Note Linking & Backlinks
 - [ ] Parse wiki-style links `[[note-name]]`
 - [ ] Track links between notes
@@ -295,12 +261,6 @@
 - [ ] Export category to archive (zip/tar)
 - [ ] Export all notes with formatting
 
-### Attachments
-- [ ] Support attachments folder per note
-- [ ] Auto-copy attachments to notes directory
-- [ ] Relative path links in markdown
-- [ ] Attachment management commands
-
 ### Visual Enhancements (from README extras)
 - [ ] **Gruvbox color theme** - implement as theme in Rich
 - [ ] **Nerd fonts support** - use icons for categories/tags
@@ -311,11 +271,8 @@
 - [ ] Built-in editor? (probably not, but considering it)
 
 ### Advanced Git Features
-- [ ] Git branch support (work on feature branches)
 - [ ] Git history browser (see note history)
 - [ ] Restore previous versions
-- [ ] Compare note versions (diff)
-- [ ] Merge conflict resolution UI
 
 ### Performance
 - [ ] SQLite indexing for large note collections (1000+ notes)
@@ -335,27 +292,6 @@
 - [ ] Encrypt/decrypt on the fly
 - [ ] Support for .gpg files
 - [ ] Key management
-
-### Collaboration
-- [ ] Conflict resolution UI
-- [ ] Show who last edited (git blame)
-- [ ] Comment system (via git notes?)
-- [ ] Shared notes (team wiki mode)
-
-### Web Interface (Ambitious)
-- [ ] Optional web UI for browsing
-- [ ] Markdown rendering in browser
-- [ ] Real-time sync via websockets
-- [ ] Mobile-friendly interface
-
-### Plugin System (Very Ambitious)
-- [ ] Plugin architecture
-- [ ] Custom commands
-- [ ] Custom filters
-- [ ] Custom themes
-- [ ] Community plugins
-
----
 
 ## Bugs to Watch For
 
@@ -403,78 +339,3 @@
 - [ ] Test line endings (CRLF vs LF)
 - [ ] Test unicode filenames
 
----
-
-## Done ✅
-
-- [x] Create CLAUDE.md with architecture
-- [x] Create TODO.md with task breakdown
-- [x] Define minimal dependency list
-- [x] Design CLI interface
-- [x] Design config system
-- [x] Design note structure
-- [x] Design git sync strategy
-- [x] Reorganize to flat src/ package structure
-- [x] Implement all core modules (config, notes, git, fzf, editor, utils)
-- [x] Create comprehensive README with examples
-- [x] Simplify pyproject.toml
-- [x] Add python-frontmatter dependency
-- [x] **Implement complete CLI functionality - MVP working!**
-- [x] Wire up all commands (browse, new, sync, config)
-- [x] Implement all special flags (--daily, --last, --category)
-- [x] Add git sync workflow (pull before edit, commit after edit)
-- [x] Simplify config (removed git_auto_commit and git_auto_push)
-- [x] **Create comprehensive test suite - 98/106 tests passing (92%)**
-- [x] Write unit tests for all core modules (config, notes, git, editor, FZF)
-- [x] Create test fixtures and conftest setup
-- [x] Create Makefile with uv-based commands (test, lint, format, etc.)
-- [x] Fix metadata deprecation warning in __init__.py
-- [x] Add pytest and pytest-mock to development dependencies
-
----
-
-## Notes
-
-### Decisions to Make During Implementation
-1. **Markdown rendering**: bat vs rich.markdown
-2. **Async git**: Should git operations be async?
-3. **Cache strategy**: In-memory vs SQLite for large collections
-4. **Template format**: Jinja2 vs simple string substitution
-
-### Installation Instructions (to add to README)
-```bash
-# Install from source
-pip install -e .
-
-# Install with development dependencies
-pip install -e ".[dev]"
-
-# Run yana
-yana
-
-# Or using python module
-python -m yana
-```
-
-### Configuration Example (to add to README)
-```json
-{
-  "notes_dir": "~/notes",
-  "editor": "nvim",
-  "git_enabled": true,
-  "git_auto_commit": true,
-  "git_auto_push": false,
-  "git_commit_interval": 300,
-  "watch_enabled": false,
-  "fzf_preview": true,
-  "fzf_preview_command": "bat --style=plain --color=always {}"
-}
-```
-
-### Environment Variables
-```bash
-export YANA_NOTES_DIR="$HOME/notes"
-export YANA_EDITOR="nvim"
-export YANA_GIT_ENABLED="true"
-export YANA_GIT_AUTO_PUSH="false"
-```

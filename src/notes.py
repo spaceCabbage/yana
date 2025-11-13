@@ -244,3 +244,81 @@ class NoteManager:
             raise NoteError(f"Failed to create daily note: {e}")
 
         return Note.from_file(note_path)
+
+    def update_note(
+        self,
+        note: Note,
+        content: Optional[str] = None,
+        category: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+    ) -> Note:
+        """
+        Update a note's content or frontmatter.
+
+        Since Note is frozen, this creates an updated frontmatter file.
+
+        Args:
+            note: The note to update
+            content: New content (if None, keeps existing)
+            category: New category (if None, keeps existing)
+            tags: New tags (if None, keeps existing)
+
+        Returns:
+            Updated Note object (reloaded from file)
+
+        Raises:
+            NoteError: If file doesn't exist or save fails
+        """
+        if not note.path.exists():
+            raise NoteError(f"Note not found: {note.path}")
+
+        # Use provided values or keep existing
+        updated_content = content if content is not None else note.content
+        updated_category = category if category is not None else note.category
+        updated_tags = tags if tags is not None else note.tags
+
+        # Create updated frontmatter post
+        post = frontmatter.Post(
+            updated_content,
+            category=updated_category,
+            tags=updated_tags,
+            created=note.created_at.isoformat(),
+            modified=datetime.now().isoformat(),
+        )
+
+        # Write to file
+        try:
+            with open(note.path, "w") as f:
+                f.write(frontmatter.dumps(post))
+        except Exception as e:
+            raise NoteError(f"Failed to update note {note.path}: {e}")
+
+        # Invalidate cache
+        self._cache = None
+
+        # Return updated note
+        return Note.from_file(note.path)
+
+    def delete_note(self, path: Path) -> None:
+        """
+        Delete a note file.
+
+        Args:
+            path: Path to the note file to delete
+
+        Raises:
+            NoteError: If file doesn't exist or deletion fails
+        """
+        if not path.exists():
+            raise NoteError(f"Note not found: {path}")
+
+        if not path.is_file():
+            raise NoteError(f"Not a file: {path}")
+
+        try:
+            path.unlink()
+        except Exception as e:
+            raise NoteError(f"Failed to delete note {path}: {e}")
+
+        # Invalidate cache
+        self._cache = None

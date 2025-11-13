@@ -310,3 +310,161 @@ def test_note_manager_create_note_with_existing_content(temp_notes_dir):
     assert "tag2" in content
     assert "created:" in content
     assert "modified:" in content
+
+
+def test_note_manager_update_note_content(temp_notes_dir):
+    """Test updating note content."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note
+    note = manager.create_note("Original Note", "work", ["tag1"])
+
+    # Update content
+    new_content = "# Updated Content\n\nThis is the new content."
+    updated_note = manager.update_note(note, content=new_content)
+
+    assert updated_note.content == new_content
+    assert updated_note.category == "work"  # Unchanged
+    assert updated_note.tags == ["tag1"]  # Unchanged
+    assert updated_note.path == note.path  # Same file
+
+
+def test_note_manager_update_note_category(temp_notes_dir):
+    """Test updating note category."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note
+    note = manager.create_note("Test Note", "work", ["tag1"])
+
+    # Update category
+    updated_note = manager.update_note(note, category="personal")
+
+    assert updated_note.category == "personal"
+    assert updated_note.content == note.content  # Unchanged
+    assert updated_note.tags == ["tag1"]  # Unchanged
+
+
+def test_note_manager_update_note_tags(temp_notes_dir):
+    """Test updating note tags."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note
+    note = manager.create_note("Test Note", "work", ["tag1"])
+
+    # Update tags
+    new_tags = ["tag2", "tag3", "tag4"]
+    updated_note = manager.update_note(note, tags=new_tags)
+
+    assert updated_note.tags == new_tags
+    assert updated_note.category == "work"  # Unchanged
+    assert updated_note.content == note.content  # Unchanged
+
+
+def test_note_manager_update_note_multiple_fields(temp_notes_dir):
+    """Test updating multiple fields at once."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note
+    note = manager.create_note("Test Note", "work", ["tag1"])
+
+    # Update multiple fields
+    new_content = "# New Content"
+    new_category = "personal"
+    new_tags = ["tag2", "tag3"]
+
+    updated_note = manager.update_note(
+        note, content=new_content, category=new_category, tags=new_tags
+    )
+
+    assert updated_note.content == new_content
+    assert updated_note.category == new_category
+    assert updated_note.tags == new_tags
+
+
+def test_note_manager_update_note_not_found(temp_notes_dir):
+    """Test updating non-existent note raises error."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note then delete the file
+    note = manager.create_note("Test Note", "work", [])
+    note.path.unlink()
+
+    # Try to update
+    with pytest.raises(NoteError, match="not found"):
+        manager.update_note(note, content="New content")
+
+
+def test_note_manager_update_note_invalidates_cache(temp_notes_dir):
+    """Test that updating a note invalidates the cache."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create notes and populate cache
+    note1 = manager.create_note("Note 1", "work", [])
+    note2 = manager.create_note("Note 2", "work", [])
+    manager.list_all_notes()  # Populate cache
+
+    # Update note1
+    manager.update_note(note1, category="personal")
+
+    # Cache should be invalidated, so list_all_notes should reload
+    notes = manager.list_all_notes()
+    updated = next(n for n in notes if n.path == note1.path)
+    assert updated.category == "personal"
+
+
+def test_note_manager_delete_note(temp_notes_dir):
+    """Test deleting a note."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note
+    note = manager.create_note("Test Note", "work", [])
+    note_path = note.path
+
+    assert note_path.exists()
+
+    # Delete the note
+    manager.delete_note(note_path)
+
+    # File should be gone
+    assert not note_path.exists()
+
+
+def test_note_manager_delete_note_not_found(temp_notes_dir):
+    """Test deleting non-existent note raises error."""
+    manager = NoteManager(temp_notes_dir)
+
+    fake_path = temp_notes_dir / "nonexistent.md"
+
+    with pytest.raises(NoteError, match="not found"):
+        manager.delete_note(fake_path)
+
+
+def test_note_manager_delete_note_not_file(temp_notes_dir):
+    """Test deleting a directory raises error."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Try to delete a directory
+    subdir = temp_notes_dir / "subdir"
+    subdir.mkdir()
+
+    with pytest.raises(NoteError, match="Not a file"):
+        manager.delete_note(subdir)
+
+
+def test_note_manager_delete_note_invalidates_cache(temp_notes_dir):
+    """Test that deleting a note invalidates the cache."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create notes and populate cache
+    note1 = manager.create_note("Note 1", "work", [])
+    note2 = manager.create_note("Note 2", "work", [])
+    notes_before = manager.list_all_notes()
+    assert len(notes_before) == 2
+
+    # Delete note1
+    manager.delete_note(note1.path)
+
+    # Cache should be invalidated
+    notes_after = manager.list_all_notes()
+    assert len(notes_after) == 1
+    assert notes_after[0].path == note2.path

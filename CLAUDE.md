@@ -25,16 +25,19 @@ YANA (Yet Another Notes App) is a CLI-based markdown notes manager with FZF inte
 
 ### 1. Dependencies (Minimal by Design)
 
-**Core Dependencies (5 libraries):**
+**Core Dependencies (6 libraries):**
 ```toml
 dependencies = [
-    "iterfzf>=1.4.0",   # FZF integration (bundles fzf binary)
-    "typer>=0.9.0",     # Modern CLI framework with type hints
-    "pyyaml>=6.0",      # YAML frontmatter parsing
-    "rich>=13.7.0",     # Terminal UI, colors, pretty output
-    "watchdog>=3.0.0",  # File system monitoring
+    "iterfzf>=1.8.0",              # FZF integration (bundles fzf binary)
+    "typer>=0.20.0",               # Modern CLI framework with type hints
+    "pyyaml>=6.0.3",               # YAML frontmatter parsing
+    "rich>=14.2.0",                # Terminal UI, colors, pretty output
+    "watchdog>=6.0.0",             # File system monitoring
+    "python-frontmatter>=1.1.0",   # Markdown frontmatter parsing
 ]
 ```
+
+**Updated: 2025-01-13** - All dependencies updated to latest stable versions with Python 3.13 support
 
 **Why These?**
 - `iterfzf`: Bundles fzf, cross-platform, no external deps
@@ -49,6 +52,7 @@ dependencies = [
 - `pathlib` - All file operations
 - `dataclasses` - Data structures with slots
 - `typing` - Modern type hints
+- `logging` - Comprehensive logging system
 
 **What We're NOT Using:**
 - ❌ GitPython - subprocess is simpler and more direct
@@ -343,22 +347,59 @@ class NoteWatcher(FileSystemEventHandler):
 
 ### 10. Markdown Rendering
 
-**Decision: TBD**
+**Decision: ✅ Use bat**
 
-**Option A: cat/bat (Current Plan)**
-- Use `bat` if available for syntax highlighting
-- Fallback to `cat`
-- Pros: No extra rendering logic
-- Cons: Limited styling
+**Chosen Approach:**
+- Use `bat` for FZF preview (syntax highlighting, fast)
+- Fallback to `cat` if bat not available
+- Configurable via `fzf_preview_command` in config
 
-**Option B: Rich (Alternative)**
-- Use `rich.markdown.Markdown`
-- Pros: Beautiful rendering, syntax highlighting
-- Cons: Rich already a dependency
+**Rationale:**
+- Already integrated in FZF preview
+- No extra code needed
+- Fast and efficient
+- Users can customize preview command in config
+- Rich could be used in future for inline rendering
 
-**TODO:** Decide during implementation which feels better
+### 11. Logging System
 
-### 11. Modern Python 3.13 Features
+**Implementation: ✅ Comprehensive logging with file + console**
+
+**Log Location:**
+- File: `~/.config/yana/yana.log`
+- Console: Only WARNING and above by default
+
+**Configuration:**
+- `YANA_LOG_LEVEL` environment variable (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Defaults to INFO level for file, WARNING for console
+
+**Setup:**
+```python
+from src.utils import logger, setup_logging
+
+# Initialize logging (automatic in CLI)
+setup_logging()
+
+# Use logger
+logger.debug("Debug message")
+logger.info("Info message")
+logger.warning("Warning message")
+logger.error("Error message")
+```
+
+**Log Format:**
+- File: `2025-01-13 15:30:00 - yana - INFO - Message`
+- Console: `WARNING: Message`
+
+**Strategic Logging:**
+- Config loading and validation
+- Note CRUD operations (create, update, delete)
+- Git operations (pull, commit, push, sync)
+- Editor integration (opening, modification detection)
+- FZF selection and cancellation
+- Error conditions and warnings
+
+### 12. Modern Python 3.13 Features
 
 **Type Parameter Syntax (PEP 695):**
 ```python
@@ -479,8 +520,11 @@ yana/
 ### `utils.py` - Utilities
 - Date/time helpers
 - Path validation
-- Error classes
-- Logging setup
+- Error classes (YanaError, ConfigError, NoteError, GitError, EditorError, FzfError)
+- Logging system setup (file + console)
+- Logger instance for application-wide use
+- String helpers (slugify, truncate)
+- Rich console singleton
 
 ---
 
@@ -657,7 +701,31 @@ mypy src/yana
 
 ## Changelog
 
-**2025-01-13:**
+**2025-01-13 (Session 3 - Production Ready):**
+- Updated all dependencies to latest stable versions (Python 3.13 support)
+  - iterfzf 1.4.0 → 1.8.0, typer 0.9.0 → 0.20.0, rich 13.7.0 → 14.2.0
+  - watchdog 3.0.0 → 6.0.0, pytest 7.4.0 → 9.0.1, black 23.12.0 → 25.11.0
+- Completed CRUD operations: NoteManager.update_note() and delete_note()
+- Added 10 comprehensive tests for update/delete operations (108/116 tests passing - 93.1%)
+- Implemented comprehensive logging system
+  - File logging to ~/.config/yana/yana.log
+  - Console logging (WARNING and above)
+  - Configurable via YANA_LOG_LEVEL environment variable
+  - Strategic logging throughout CLI, git, and note operations
+- Added pytest-cov for coverage reporting (69% overall coverage)
+- Created .python-version file (3.13)
+- Decided on markdown preview approach: use bat (fast, syntax highlighting)
+- Polished error handling with "no notes found" helpful messages
+- Updated documentation (TODO.md, CLAUDE.md) with all decisions and progress
+
+**2025-01-13 (Session 2 - MVP Complete):**
+- Implemented complete CLI functionality
+- All core features working (browse, new, sync, config commands)
+- Git sync workflow implemented
+- Comprehensive test suite created (98/106 tests passing - 92%)
+- Fixed metadata deprecation warning
+
+**2025-01-13 (Session 1 - Architecture):**
 - Initial architecture design
 - Minimal dependencies finalized
 - Flat category system chosen

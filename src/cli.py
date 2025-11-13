@@ -12,10 +12,10 @@ from rich.panel import Panel
 from src import __version__
 from src.config import ConfigError, load_config
 from src.editor import open_in_editor
-from src.fzf import NoteFuzzyFinder, FzfError
-from src.git import GitSync, GitError
-from src.notes import NoteManager, Note
-from src.utils import YanaError
+from src.fzf import FzfError, NoteFuzzyFinder
+from src.git import GitError, GitSync
+from src.notes import Note, NoteManager
+from src.utils import YanaError, logger, setup_logging
 
 app = typer.Typer(
     name="yana",
@@ -23,6 +23,9 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+# Initialize logging on module import
+setup_logging()
 
 
 def version_callback(value: bool) -> None:
@@ -36,27 +39,33 @@ def version_callback(value: bool) -> None:
 def _sync_before_edit(git_sync: GitSync) -> None:
     """Pull changes before editing if there are remote changes."""
     try:
+        logger.debug("Checking for remote changes")
         if git_sync.has_remote_changes():
             console.print("[blue]Pulling remote changes...[/blue]")
+            logger.info("Pulling remote changes")
             git_sync.pull()
             console.print("[green]✓[/green] Synced with remote")
+            logger.info("Successfully synced with remote")
     except GitError as e:
+        logger.warning(f"Could not pull changes: {e}")
         console.print(f"[yellow]Warning: Could not pull changes: {e}[/yellow]")
 
 
-def _sync_after_edit(
-    git_sync: GitSync, note_path: Path, was_modified: bool
-) -> None:
+def _sync_after_edit(git_sync: GitSync, note_path: Path, was_modified: bool) -> None:
     """Commit changes after editing."""
     if not was_modified:
+        logger.debug("No modifications detected, skipping commit")
         return
 
     try:
         # Commit the file
+        logger.info(f"Committing changes to {note_path}")
         git_sync.commit_file(note_path)
         console.print(f"[green]✓[/green] Changes committed: {note_path.name}")
+        logger.info(f"Successfully committed {note_path.name}")
 
     except GitError as e:
+        logger.error(f"Could not commit changes: {e}")
         console.print(f"[yellow]Warning: Could not commit changes: {e}[/yellow]")
 
 
@@ -97,21 +106,28 @@ def main(
         yana --last                 # Open last edited note
     """
     try:
+        logger.debug("Loading configuration")
         config = load_config()
+        logger.debug(f"Config loaded: notes_dir={config.notes_dir}")
+
         note_manager = NoteManager(config.notes_dir)
 
         # Initialize git if enabled
         git_sync = None
         if config.git_enabled:
             try:
+                logger.debug("Initializing git sync")
                 git_sync = GitSync(config.notes_dir)
+                logger.info("Git sync initialized")
             except GitError as e:
+                logger.warning(f"Git not available: {e}")
                 console.print(f"[yellow]Git not available: {e}[/yellow]")
 
         note_to_open: Optional[Note] = None
 
         # Handle --daily flag
         if daily:
+            logger.info("Opening daily journal")
             note_to_open = note_manager.get_daily_note()
             console.print(
                 f"[blue]Opening daily journal:[/blue] {note_to_open.path.name}"
@@ -119,8 +135,10 @@ def main(
 
         # Handle --last flag
         elif last:
+            logger.info("Opening last edited note")
             note_to_open = note_manager.get_last_edited_note()
             if not note_to_open:
+                logger.debug("No notes found in directory")
                 console.print("[yellow]No notes found[/yellow]")
                 raise typer.Exit(0)
             console.print(f"[blue]Opening last note:[/blue] {note_to_open.title}")
@@ -136,9 +154,7 @@ def main(
                 all_notes = note_manager.list_all_notes()
                 dir_notes = [n for n in all_notes if path in n.path.parents]
                 if not dir_notes:
-                    console.print(
-                        f"[yellow]No notes found in {path}[/yellow]"
-                    )
+                    console.print(f"[yellow]No notes found in {path}[/yellow]")
                     raise typer.Exit(0)
                 # Launch FZF for directory
                 finder = NoteFuzzyFinder(
@@ -154,9 +170,12 @@ def main(
         # Handle browse mode (default)
         else:
             # Load all notes
+            logger.debug("Loading all notes for browsing")
             all_notes = note_manager.list_all_notes()
+            logger.debug(f"Found {len(all_notes)} notes")
 
             if not all_notes:
+                logger.info("No notes found in directory")
                 console.print(
                     "[yellow]No notes found.[/yellow] Create one with: [bold]yana new <title> <category>[/bold]"
                 )
@@ -219,6 +238,7 @@ def new(
         yana new "Daily Standup" team-sync --tag meeting --tag standup
     """
     try:
+        logger.debug("Loading configuration for new note")
         config = load_config()
         note_manager = NoteManager(config.notes_dir)
 
@@ -228,11 +248,16 @@ def new(
             try:
                 git_sync = GitSync(config.notes_dir)
             except GitError as e:
+                logger.warning(f"Git not available: {e}")
                 console.print(f"[yellow]Git not available: {e}[/yellow]")
 
         # Create the note
+        logger.info(
+            f"Creating new note: title={title}, category={category}, tags={tags}"
+        )
         console.print(f"[blue]Creating note:[/blue] {title}")
         note = note_manager.create_note(title, category, tags)
+        logger.info(f"Note created: {note.path}")
         console.print(f"[green]✓[/green] Created: {note.path}")
 
         # Sync before editing
@@ -267,9 +292,11 @@ def sync() -> None:
         yana sync    # Sync all changes
     """
     try:
+        logger.debug("Starting manual sync")
         config = load_config()
 
         if not config.git_enabled:
+            logger.info("Git sync is disabled in config")
             console.print("[yellow]Git sync is disabled in config[/yellow]")
             raise typer.Exit(0)
 
@@ -277,12 +304,15 @@ def sync() -> None:
         try:
             git_sync = GitSync(config.notes_dir)
         except GitError as e:
+            logger.error(f"Git initialization failed: {e}")
             console.print(f"[red]Git Error:[/red] {e}")
             raise typer.Exit(1)
 
         # Perform sync
+        logger.info("Performing git sync")
         console.print("[blue]Syncing notes...[/blue]")
         result = git_sync.sync()
+        logger.debug(f"Sync result: success={result.success}, message={result.message}")
 
         if result.success:
             console.print(f"[green]✓[/green] {result.message}")

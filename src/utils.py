@@ -2,6 +2,8 @@
 Utility functions and custom exceptions.
 """
 
+import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -10,6 +12,9 @@ from rich.console import Console
 
 # Singleton Rich console
 console = Console()
+
+# Logger instance
+logger = logging.getLogger("yana")
 
 
 # ============================================================================
@@ -165,3 +170,65 @@ def truncate(text: str, max_length: int = 50) -> str:
     if len(text) <= max_length:
         return text
     return text[: max_length - 3] + "..."
+
+
+# ============================================================================
+# Logging Setup
+# ============================================================================
+
+
+def setup_logging(log_level: Optional[str] = None) -> None:
+    """
+    Set up logging for YANA with file and console handlers.
+
+    Logs are written to ~/.config/yana/yana.log
+
+    Args:
+        log_level: Override log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+                  If None, uses YANA_LOG_LEVEL env var, defaults to INFO
+    """
+    # Get log level
+    if log_level is None:
+        log_level = os.getenv("YANA_LOG_LEVEL", "INFO").upper()
+
+    # Convert to logging level
+    numeric_level = getattr(logging, log_level, logging.INFO)
+
+    # Clear any existing handlers
+    logger.handlers.clear()
+
+    # Set logger level
+    logger.setLevel(numeric_level)
+
+    # Create log directory
+    log_dir = Path.home() / ".config" / "yana"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "yana.log"
+
+    # Create formatters
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    console_formatter = logging.Formatter("%(levelname)s: %(message)s")
+
+    # File handler (always logs DEBUG and above)
+    try:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        # If we can't write to log file, continue without file logging
+        print(f"Warning: Could not create log file {log_file}: {e}")
+
+    # Console handler (uses configured level)
+    # Only show WARNING and above on console by default
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(max(numeric_level, logging.WARNING))
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    logger.debug(f"Logging initialized at level {log_level}")
+    logger.debug(f"Log file: {log_file}")
