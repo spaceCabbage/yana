@@ -468,3 +468,236 @@ def test_note_manager_delete_note_invalidates_cache(temp_notes_dir):
     notes_after = manager.list_all_notes()
     assert len(notes_after) == 1
     assert notes_after[0].path == note2.path
+
+
+# ============================================================================
+# Search Tests
+# ============================================================================
+
+
+def test_search_content_python_fallback(temp_notes_dir):
+    """Test content search using Python fallback."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create test notes with searchable content
+    note1 = manager.create_note("Meeting Notes", "work", ["meeting"])
+    note2 = manager.create_note("Todo List", "personal", ["todo"])
+    note3 = manager.create_note("Ideas", "work", ["brainstorm"])
+
+    # Update notes with specific content
+    manager.update_note(note1, content="# Meeting Notes\n\nDiscuss TODO items for project")
+    manager.update_note(note2, content="# Todo List\n\n- Buy groceries\n- Call mom")
+    manager.update_note(note3, content="# Ideas\n\nAdd TODO: review code")
+
+    # Search for "TODO" (case-insensitive)
+    results = manager.search_content("TODO", context_lines=1)
+
+    # Should find note1 and note3 (both have "TODO")
+    assert len(results) == 2
+    result_titles = {note.title for note, _ in results}
+    assert "Meeting Notes" in result_titles
+    assert "Ideas" in result_titles
+
+
+def test_search_content_no_matches(temp_notes_dir):
+    """Test search with no matches."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create note without search term
+    manager.create_note("Empty Note", "work", [])
+
+    # Search for non-existent term
+    results = manager.search_content("nonexistent")
+
+    assert len(results) == 0
+
+
+def test_search_content_regex_pattern(temp_notes_dir):
+    """Test search with regex pattern."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create notes
+    note1 = manager.create_note("Code Review", "work", [])
+    note2 = manager.create_note("Shopping", "personal", [])
+
+    # Update with content
+    manager.update_note(note1, content="# Code Review\n\nBug #123\nIssue #456")
+    manager.update_note(note2, content="# Shopping\n\nItem count: 5")
+
+    # Search for pattern "Issue #\d+"
+    results = manager.search_content(r"Issue #\d+")
+
+    assert len(results) == 1
+    note, matches = results[0]
+    assert note.title == "Code Review"
+    assert any("#456" in line for _, line in matches)
+
+
+def test_search_content_invalid_regex(temp_notes_dir):
+    """Test search with invalid regex pattern using Python regex."""
+    manager = NoteManager(temp_notes_dir)
+    manager.create_note("Test Note", "work", [])
+
+    # Invalid regex should raise NoteError when using Python regex
+    # Use a truly invalid pattern: quantifier without preceding element
+    with pytest.raises(NoteError, match="Invalid regex pattern"):
+        # Directly call Python search to test regex validation
+        manager._search_with_python("*invalid", context_lines=1)
+
+
+def test_search_content_context_lines(temp_notes_dir):
+    """Test that context lines are included in results."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create note with multi-line content
+    note = manager.create_note("Context Test", "work", [])
+    content = """# Context Test
+
+Line 1
+Line 2
+MATCH HERE
+Line 4
+Line 5
+"""
+    manager.update_note(note, content=content)
+
+    # Search with 2 context lines
+    results = manager.search_content("MATCH HERE", context_lines=2)
+
+    assert len(results) == 1
+    _, matches = results[0]
+
+    # Should have match line plus context (2 before, 2 after)
+    lines_text = [line for _, line in matches]
+    assert "MATCH HERE" in " ".join(lines_text)
+    assert "Line 2" in " ".join(lines_text) or "Line 4" in " ".join(lines_text)
+
+
+def test_detect_search_tool(temp_notes_dir, mocker):
+    """Test search tool detection."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Mock successful ripgrep detection
+    mocker.patch(
+        "subprocess.run",
+        return_value=mocker.Mock(returncode=0)
+    )
+    tool = manager._detect_search_tool()
+    assert tool == "ripgrep"
+
+    # Mock ripgrep not found, grep found
+    def mock_run(args, **kwargs):
+        if "rg" in args:
+            raise FileNotFoundError()
+        return mocker.Mock(returncode=0)
+
+    mocker.patch("subprocess.run", side_effect=mock_run)
+    tool = manager._detect_search_tool()
+    assert tool == "grep"
+
+    # Mock both not found
+    mocker.patch("subprocess.run", side_effect=FileNotFoundError())
+    tool = manager._detect_search_tool()
+    assert tool == "python"
+
+
+def test_search_with_ripgrep(temp_notes_dir, mocker):
+    """Test search using ripgrep."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create test note
+    note = manager.create_note("Test Note", "work", [])
+    manager.update_note(note, content="# Test\n\nFOUND IT")
+
+    # Mock ripgrep output
+    rg_output = f"{note.path}:3:FOUND IT\n"
+    mocker.patch(
+        "subprocess.run",
+        return_value=mocker.Mock(returncode=0, stdout=rg_output)
+    )
+
+    # Force ripgrep usage
+    mocker.patch.object(manager, "_detect_search_tool", return_value="ripgrep")
+
+    results = manager.search_content("FOUND")
+
+    assert len(results) == 1
+    found_note, matches = results[0]
+    assert found_note.title == "Test Note"
+    assert len(matches) > 0
+
+
+def test_search_with_grep(temp_notes_dir, mocker):
+    """Test search using grep."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create test note
+    note = manager.create_note("Test Note", "work", [])
+    manager.update_note(note, content="# Test\n\nFOUND IT")
+
+    # Mock grep output
+    grep_output = f"{note.path}:3:FOUND IT\n"
+    mocker.patch(
+        "subprocess.run",
+        return_value=mocker.Mock(returncode=0, stdout=grep_output)
+    )
+
+    # Force grep usage
+    mocker.patch.object(manager, "_detect_search_tool", return_value="grep")
+
+    results = manager.search_content("FOUND")
+
+    assert len(results) == 1
+    found_note, matches = results[0]
+    assert found_note.title == "Test Note"
+
+
+def test_search_timeout(temp_notes_dir, mocker):
+    """Test search timeout handling."""
+    manager = NoteManager(temp_notes_dir)
+    manager.create_note("Test Note", "work", [])
+
+    # Mock timeout
+    import subprocess
+    mocker.patch(
+        "subprocess.run",
+        side_effect=subprocess.TimeoutExpired("rg", 30)
+    )
+
+    # Force ripgrep usage
+    mocker.patch.object(manager, "_detect_search_tool", return_value="ripgrep")
+
+    with pytest.raises(NoteError, match="Search timed out"):
+        manager.search_content("test")
+
+
+def test_parse_grep_output_empty(temp_notes_dir):
+    """Test parsing empty grep output."""
+    manager = NoteManager(temp_notes_dir)
+
+    results = manager._parse_grep_output("")
+    assert len(results) == 0
+
+    results = manager._parse_grep_output("   \n\n   ")
+    assert len(results) == 0
+
+
+def test_parse_grep_output_with_context(temp_notes_dir):
+    """Test parsing grep output with context lines."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create a note
+    note = manager.create_note("Test", "work", [])
+    manager.update_note(note, content="# Test\n\nLine 1\nMatch\nLine 3")
+
+    # Simulate grep output with context (uses - for context lines)
+    output = f"""{note.path}:2:Line 1
+{note.path}:3:Match
+{note.path}-4-Line 3"""
+
+    results = manager._parse_grep_output(output)
+
+    assert len(results) == 1
+    found_note, matches = results[0]
+    assert found_note.path == note.path
+    assert len(matches) == 3  # Main match + 2 context lines

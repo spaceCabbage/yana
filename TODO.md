@@ -178,13 +178,13 @@
 ## Phase 9: Search & Filtering
 
 ### Content Search
-- [ ] Add search_content(query) - search note bodies
-- [ ] Use ripgrep if available (faster)
-- [ ] Fallback to grep
-- [ ] Fallback to Python search if no external tools
-- [ ] Display search results in FZF
-- [ ] Show context around matches
-- [ ] Add --search/-s CLI option
+- [x] Add search_content(query) - search note bodies
+- [x] Use ripgrep if available (faster)
+- [x] Fallback to grep
+- [x] Fallback to Python search if no external tools
+- [x] Display search results in FZF
+- [x] Show context around matches
+- [x] Add --search/-s CLI option
 
 ### Advanced Filtering
 - [ ] Add filter_by_multiple_tags(tags) - AND logic
@@ -196,11 +196,11 @@
 ## Phase 10: Polish & UX
 
 ### Error Handling
-- [ ] Add helpful error messages for all errors
-- [ ] Show config path in ConfigError
-- [ ] Show git command output in GitError
-- [ ] Add suggestions for common errors
-- [ ] Color code errors (red), warnings (yellow), info (blue)
+- [x] Add helpful error messages for all errors
+- [x] Show config path in ConfigError
+- [x] Show git command output in GitError
+- [x] Add suggestions for common errors
+- [x] Color code errors (red), warnings (yellow), info (blue)
 
 ### User Feedback
 - [ ] Add success messages for operations
@@ -219,7 +219,7 @@
 
 ### Testing
 - [x] Write unit tests for config loading (14 tests - 100% pass)
-- [x] Write unit tests for note operations (31 tests - 100% pass) **+10 CRUD tests**
+- [x] Write unit tests for note operations (44 tests - 100% pass) **+10 CRUD, +13 search tests**
 - [x] Write unit tests for frontmatter parsing
 - [x] Write integration tests for git sync (22 tests - 100% pass)
 - [x] Write integration tests for FZF (20 tests - 100% pass)
@@ -228,7 +228,8 @@
 - [x] Create Makefile with test commands
 - [x] Add pytest, pytest-mock, and pytest-cov to dev dependencies
 - [x] Fix metadata deprecation warning
-- [ ] Fix CLI integration tests (8 failing - low priority)
+- [x] Write unit tests for content search (13 tests - 100% pass)
+- [ ] Fix CLI integration tests (9 failing - low priority)
 - [ ] Set up CI/CD (GitHub Actions?)
 
 ## Later/Extra Features

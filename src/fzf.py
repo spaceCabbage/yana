@@ -117,7 +117,8 @@ class NoteFuzzyFinder:
             fzf_options["preview"] = (
                 f"echo {{}} | awk -F' \\| ' '{{print $NF}}' | xargs {preview_cmd.replace('{}', '')}"
             )
-            fzf_options["preview_window"] = "right:50%:wrap"
+            # Use __extra__ for FZF-specific options like preview-window
+            fzf_options["__extra__"] = ["--preview-window=right:50%:wrap"]
 
         # Launch FZF
         try:

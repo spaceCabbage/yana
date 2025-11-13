@@ -2,6 +2,8 @@
 Note management and operations.
 """
 
+import re
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +11,7 @@ from typing import Optional
 
 import frontmatter
 
-from src.utils import NoteError
+from src.utils import NoteError, logger
 
 
 @dataclass(slots=True, frozen=True)
@@ -322,3 +324,243 @@ class NoteManager:
 
         # Invalidate cache
         self._cache = None
+
+    def search_content(
+        self, query: str, context_lines: int = 2
+    ) -> list[tuple[Note, list[tuple[int, str]]]]:
+        """
+        Search note content for a query string.
+
+        Uses ripgrep (rg) if available, falls back to grep, then Python regex.
+
+        Args:
+            query: Search query (treated as regex)
+            context_lines: Number of context lines to show around matches
+
+        Returns:
+            List of (Note, matches) tuples where matches is a list of (line_number, line_text)
+
+        Raises:
+            NoteError: If search fails
+        """
+        logger.debug(f"Searching for '{query}' in notes directory: {self.notes_dir}")
+
+        # Check which search tool is available
+        search_tool = self._detect_search_tool()
+        logger.debug(f"Using search tool: {search_tool}")
+
+        if search_tool == "ripgrep":
+            return self._search_with_ripgrep(query, context_lines)
+        elif search_tool == "grep":
+            return self._search_with_grep(query, context_lines)
+        else:
+            return self._search_with_python(query, context_lines)
+
+    def _detect_search_tool(self) -> str:
+        """Detect which search tool is available (ripgrep > grep > python)."""
+        # Try ripgrep
+        try:
+            result = subprocess.run(
+                ["rg", "--version"],
+                capture_output=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                logger.debug("ripgrep (rg) detected")
+                return "ripgrep"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # Try grep
+        try:
+            result = subprocess.run(
+                ["grep", "--version"],
+                capture_output=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                logger.debug("grep detected")
+                return "grep"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        logger.debug("No external search tool found, using Python regex")
+        return "python"
+
+    def _search_with_ripgrep(
+        self, query: str, context_lines: int
+    ) -> list[tuple[Note, list[tuple[int, str]]]]:
+        """Search using ripgrep (rg)."""
+        try:
+            # Run ripgrep with line numbers and context
+            result = subprocess.run(
+                [
+                    "rg",
+                    "--line-number",
+                    "--with-filename",
+                    "--no-heading",
+                    "--color=never",
+                    f"--context={context_lines}",
+                    "--type=md",
+                    query,
+                    str(self.notes_dir),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse results
+            return self._parse_grep_output(result.stdout)
+
+        except subprocess.TimeoutExpired:
+            raise NoteError("Search timed out (>30s)")
+        except Exception as e:
+            logger.warning(f"ripgrep search failed: {e}, falling back to Python")
+            return self._search_with_python(query, context_lines)
+
+    def _search_with_grep(
+        self, query: str, context_lines: int
+    ) -> list[tuple[Note, list[tuple[int, str]]]]:
+        """Search using grep."""
+        try:
+            # Run grep with line numbers and context
+            result = subprocess.run(
+                [
+                    "grep",
+                    "-r",
+                    "-n",
+                    "--color=never",
+                    f"-C{context_lines}",
+                    "--include=*.md",
+                    query,
+                    str(self.notes_dir),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse results
+            return self._parse_grep_output(result.stdout)
+
+        except subprocess.TimeoutExpired:
+            raise NoteError("Search timed out (>30s)")
+        except Exception as e:
+            logger.warning(f"grep search failed: {e}, falling back to Python")
+            return self._search_with_python(query, context_lines)
+
+    def _search_with_python(
+        self, query: str, context_lines: int
+    ) -> list[tuple[Note, list[tuple[int, str]]]]:
+        """Search using Python regex (fallback)."""
+        try:
+            pattern = re.compile(query, re.IGNORECASE)
+        except re.error as e:
+            raise NoteError(f"Invalid regex pattern: {e}")
+
+        results: list[tuple[Note, list[tuple[int, str]]]] = []
+
+        for md_file in self.notes_dir.rglob("*.md"):
+            try:
+                with open(md_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+
+                matches: list[tuple[int, str]] = []
+                matched_lines = set()  # Track which lines we've already added
+
+                for i, line in enumerate(lines, start=1):
+                    if pattern.search(line):
+                        # Add match with context
+                        # Calculate the range of lines to include (1-indexed)
+                        start_line = max(1, i - context_lines)
+                        end_line = min(len(lines), i + context_lines)
+
+                        # Add all lines in range (avoiding duplicates)
+                        for line_num in range(start_line, end_line + 1):
+                            if line_num not in matched_lines:
+                                matched_lines.add(line_num)
+                                matches.append((line_num, lines[line_num - 1].rstrip()))
+
+                if matches:
+                    note = Note.from_file(md_file)
+                    results.append((note, matches))
+
+            except Exception as e:
+                logger.warning(f"Failed to search {md_file}: {e}")
+                continue
+
+        return results
+
+    def _parse_grep_output(
+        self, output: str
+    ) -> list[tuple[Note, list[tuple[int, str]]]]:
+        """Parse grep/ripgrep output into structured results."""
+        if not output.strip():
+            return []
+
+        results: dict[Path, list[tuple[int, str]]] = {}
+
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+
+            # Parse format: path:line_number:content or path-line_number-content (context)
+            # Try colon separator first (match lines)
+            if ":" in line:
+                # Find second colon (first is after path, second is after line number)
+                first_colon = line.find(":")
+                second_colon = line.find(":", first_colon + 1)
+
+                if second_colon > 0:
+                    file_path = Path(line[:first_colon])
+                    try:
+                        line_number = int(line[first_colon + 1:second_colon])
+                        line_content = line[second_colon + 1:]
+                    except ValueError:
+                        continue
+                else:
+                    continue
+            # Try dash separator (context lines)
+            elif "-" in line:
+                # Find the FIRST dash after the file path
+                # The file path ends with .md, so find that first
+                md_ext = line.rfind(".md")
+                if md_ext == -1:
+                    continue
+
+                # Find first dash after .md
+                first_dash = line.find("-", md_ext)
+                if first_dash == -1:
+                    continue
+
+                # Find second dash
+                second_dash = line.find("-", first_dash + 1)
+                if second_dash == -1:
+                    continue
+
+                file_path = Path(line[:first_dash])
+                try:
+                    line_number = int(line[first_dash + 1:second_dash])
+                    line_content = line[second_dash + 1:]
+                except ValueError:
+                    continue
+            else:
+                continue
+
+            if file_path not in results:
+                results[file_path] = []
+
+            results[file_path].append((line_number, line_content))
+
+        # Convert to Note objects
+        final_results: list[tuple[Note, list[tuple[int, str]]]] = []
+        for file_path, matches in results.items():
+            try:
+                note = Note.from_file(file_path)
+                final_results.append((note, matches))
+            except NoteError:
+                logger.warning(f"Failed to load note: {file_path}")
+                continue
+
+        return final_results

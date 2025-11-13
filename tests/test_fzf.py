@@ -273,7 +273,8 @@ def test_select_with_preview(mock_iterfzf, sample_notes):
     # Check that preview options were passed
     call_kwargs = mock_iterfzf.call_args[1]
     assert "preview" in call_kwargs
-    assert "preview_window" in call_kwargs
+    assert "__extra__" in call_kwargs
+    assert "--preview-window=right:50%:wrap" in call_kwargs["__extra__"]
 
 
 @patch("src.fzf.iterfzf")

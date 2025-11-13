@@ -90,6 +90,9 @@ def main(
     category: Optional[str] = typer.Option(
         None, "--category", "-c", help="Filter by category"
     ),
+    search: Optional[str] = typer.Option(
+        None, "--search", "-s", help="Search note content (regex)"
+    ),
     daily: bool = typer.Option(False, "--daily", "-d", help="Open today's journal"),
     last: bool = typer.Option(False, "--last", "-l", help="Open last edited note"),
 ) -> None:
@@ -101,6 +104,7 @@ def main(
         \b
         yana                        # Browse all notes
         yana --category work        # Filter by category
+        yana --search "TODO"        # Search note content
         yana /path/to/note.md       # Open specific note
         yana --daily                # Open today's journal
         yana --last                 # Open last edited note
@@ -142,6 +146,36 @@ def main(
                 console.print("[yellow]No notes found[/yellow]")
                 raise typer.Exit(0)
             console.print(f"[blue]Opening last note:[/blue] {note_to_open.title}")
+
+        # Handle --search flag
+        elif search:
+            logger.info(f"Searching for: {search}")
+            console.print(f"[blue]Searching for:[/blue] {search}")
+
+            try:
+                search_results = note_manager.search_content(search)
+
+                if not search_results:
+                    console.print(f"[yellow]No matches found for '{search}'[/yellow]")
+                    raise typer.Exit(0)
+
+                # Extract notes from results (discard match details for FZF)
+                matched_notes = [note for note, _ in search_results]
+                console.print(f"[green]Found {len(matched_notes)} note(s) with matches[/green]")
+                logger.info(f"Found {len(matched_notes)} matching notes")
+
+                # Launch FZF to select from matching notes
+                finder = NoteFuzzyFinder(
+                    matched_notes,
+                    preview_enabled=config.fzf_preview,
+                    preview_command=config.fzf_preview_command,
+                )
+                note_to_open = finder.select()
+
+            except Exception as e:
+                logger.error(f"Search failed: {e}")
+                console.print(f"[red]Search failed:[/red] {e}")
+                raise typer.Exit(1)
 
         # Handle direct path argument
         elif path:
