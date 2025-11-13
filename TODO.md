@@ -1,6 +1,6 @@
 # YANA - Implementation TODO
 
-## Phase 1: Project Setup
+## Roadmap
 
 - [x] Create project structure
 - [x] Create CLAUDE.md with architecture decisions
@@ -12,7 +12,6 @@
 - [x] Create __init__.py files
 - [x] Set up .python-version file (3.13)
 
-## Phase 2: Core Infrastructure
 
 ### Configuration System (config.py)
 - [x] Create Config dataclass with all settings
@@ -43,7 +42,6 @@
 - [x] Add Rich console singleton
 - [x] Add logging setup function
 
-## Phase 3: Note Management
 
 ### Note Operations (notes.py - NoteManager class)
 - [x] Create NoteManager class
@@ -66,7 +64,6 @@
 - [x] Set category to "journal" for daily notes
 - [x] Add date to frontmatter automatically
 
-## Phase 4: Editor Integration
 
 ### Editor Module (editor.py)
 - [x] Create get_editor() function with priority chain
@@ -82,7 +79,6 @@
 - [x] Handle editor exit codes
 - [x] Display error if editor fails
 
-## Phase 5: FZF Integration
 
 ### FZF Module (fzf.py)
 - [x] Create NoteFuzzyFinder class
@@ -106,7 +102,6 @@
 - [x] Test preview with tables
 - [x] Test preview with links
 
-## Phase 6: Git Integration
 
 ### Git Module (git.py)
 - [x] Create GitSync class
@@ -133,7 +128,6 @@
 - [ ] Test sync with conflicts
 - [ ] Test sync with network failure
 
-## Phase 7: CLI Commands
 
 ### Main CLI (cli.py)
 - [x] Create Typer app instance
@@ -162,7 +156,6 @@
 - [x] Handle FZF cancellation (exit gracefully)
 - [x] Handle editor failures
 
-## Phase 8: File Watching (Optional)
 
 ### Watchdog Integration (notes.py or separate module)
 - [ ] Create NoteWatcher class (FileSystemEventHandler)
@@ -187,13 +180,12 @@
 - [x] Add --search/-s CLI option
 
 ### Advanced Filtering
-- [ ] Add filter_by_multiple_tags(tags) - AND logic
-- [ ] Add filter_by_any_tag(tags) - OR logic
-- [ ] Add date range filtering (created/modified)
-- [ ] Add --tag option to CLI
-- [ ] Add --since option for date filtering
+- [x] Add filter_by_multiple_tags(tags) - AND logic (via filter_by_tags)
+- [x] Add filter_by_any_tag(tags) - OR logic
+- [x] Add date range filtering (created/modified)
+- [x] Add --tag option to CLI (with --all-tags for AND/OR logic)
+- [x] Add --since/--before options for date filtering
 
-## Phase 10: Polish & UX
 
 ### Error Handling
 - [x] Add helpful error messages for all errors
@@ -219,7 +211,7 @@
 
 ### Testing
 - [x] Write unit tests for config loading (14 tests - 100% pass)
-- [x] Write unit tests for note operations (44 tests - 100% pass) **+10 CRUD, +13 search tests**
+- [x] Write unit tests for note operations (56 tests - 100% pass) **+10 CRUD, +13 search, +12 filtering tests**
 - [x] Write unit tests for frontmatter parsing
 - [x] Write integration tests for git sync (22 tests - 100% pass)
 - [x] Write integration tests for FZF (20 tests - 100% pass)
@@ -230,7 +222,6 @@
 - [x] Fix metadata deprecation warning
 - [x] Write unit tests for content search (13 tests - 100% pass)
 - [ ] Fix CLI integration tests (9 failing - low priority)
-- [ ] Set up CI/CD (GitHub Actions?)
 
 ## Later/Extra Features
 

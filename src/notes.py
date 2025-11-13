@@ -192,6 +192,111 @@ class NoteManager:
         all_notes = self.list_all_notes()
         return [note for note in all_notes if all(tag in note.tags for tag in tags)]
 
+    def filter_by_any_tag(self, tags: list[str]) -> list[Note]:
+        """Filter notes by tags (OR logic - note must have at least one tag)."""
+        all_notes = self.list_all_notes()
+        return [note for note in all_notes if any(tag in note.tags for tag in tags)]
+
+    def filter_by_date_range(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        date_field: str = "modified",
+    ) -> list[Note]:
+        """
+        Filter notes by date range.
+
+        Args:
+            start_date: Include notes on or after this date
+            end_date: Include notes on or before this date
+            date_field: Which date field to filter on ("modified" or "created")
+
+        Returns:
+            List of notes within the date range
+        """
+        all_notes = self.list_all_notes()
+
+        if date_field not in ("modified", "created"):
+            raise NoteError(
+                f"Invalid date_field: {date_field}. Must be 'modified' or 'created'"
+            )
+
+        return [
+            note
+            for note in all_notes
+            if (
+                not start_date
+                or (note.modified_at if date_field == "modified" else note.created_at)
+                >= start_date
+            )
+            and (
+                not end_date
+                or (note.modified_at if date_field == "modified" else note.created_at)
+                <= end_date
+            )
+        ]
+
+    def filter_notes(
+        self,
+        category: Optional[str] = None,
+        all_tags: Optional[list[str]] = None,
+        any_tags: Optional[list[str]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        date_field: str = "modified",
+    ) -> list[Note]:
+        """
+        Apply multiple filters to notes.
+
+        Args:
+            category: Filter by category
+            all_tags: Filter by tags (AND logic - note must have ALL tags)
+            any_tags: Filter by tags (OR logic - note must have ANY tag)
+            start_date: Include notes on or after this date
+            end_date: Include notes on or before this date
+            date_field: Which date field to filter on ("modified" or "created")
+
+        Returns:
+            List of notes matching all specified filters
+        """
+        notes = self.list_all_notes()
+
+        # Apply category filter
+        if category:
+            notes = [n for n in notes if n.category == category]
+
+        # Apply all_tags filter (AND logic)
+        if all_tags:
+            notes = [n for n in notes if all(tag in n.tags for tag in all_tags)]
+
+        # Apply any_tags filter (OR logic)
+        if any_tags:
+            notes = [n for n in notes if any(tag in n.tags for tag in any_tags)]
+
+        # Apply date range filter
+        if start_date or end_date:
+            if date_field not in ("modified", "created"):
+                raise NoteError(
+                    f"Invalid date_field: {date_field}. Must be 'modified' or 'created'"
+                )
+
+            notes = [
+                n
+                for n in notes
+                if (
+                    not start_date
+                    or (n.modified_at if date_field == "modified" else n.created_at)
+                    >= start_date
+                )
+                and (
+                    not end_date
+                    or (n.modified_at if date_field == "modified" else n.created_at)
+                    <= end_date
+                )
+            ]
+
+        return notes
+
     def search_by_title(self, query: str) -> list[Note]:
         """Search notes by title (case-insensitive)."""
         all_notes = self.list_all_notes()
@@ -515,8 +620,8 @@ class NoteManager:
                 if second_colon > 0:
                     file_path = Path(line[:first_colon])
                     try:
-                        line_number = int(line[first_colon + 1:second_colon])
-                        line_content = line[second_colon + 1:]
+                        line_number = int(line[first_colon + 1 : second_colon])
+                        line_content = line[second_colon + 1 :]
                     except ValueError:
                         continue
                 else:
@@ -541,8 +646,8 @@ class NoteManager:
 
                 file_path = Path(line[:first_dash])
                 try:
-                    line_number = int(line[first_dash + 1:second_dash])
-                    line_content = line[second_dash + 1:]
+                    line_number = int(line[first_dash + 1 : second_dash])
+                    line_content = line[second_dash + 1 :]
                 except ValueError:
                     continue
             else:

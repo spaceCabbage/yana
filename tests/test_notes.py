@@ -485,7 +485,9 @@ def test_search_content_python_fallback(temp_notes_dir):
     note3 = manager.create_note("Ideas", "work", ["brainstorm"])
 
     # Update notes with specific content
-    manager.update_note(note1, content="# Meeting Notes\n\nDiscuss TODO items for project")
+    manager.update_note(
+        note1, content="# Meeting Notes\n\nDiscuss TODO items for project"
+    )
     manager.update_note(note2, content="# Todo List\n\n- Buy groceries\n- Call mom")
     manager.update_note(note3, content="# Ideas\n\nAdd TODO: review code")
 
@@ -578,10 +580,7 @@ def test_detect_search_tool(temp_notes_dir, mocker):
     manager = NoteManager(temp_notes_dir)
 
     # Mock successful ripgrep detection
-    mocker.patch(
-        "subprocess.run",
-        return_value=mocker.Mock(returncode=0)
-    )
+    mocker.patch("subprocess.run", return_value=mocker.Mock(returncode=0))
     tool = manager._detect_search_tool()
     assert tool == "ripgrep"
 
@@ -612,8 +611,7 @@ def test_search_with_ripgrep(temp_notes_dir, mocker):
     # Mock ripgrep output
     rg_output = f"{note.path}:3:FOUND IT\n"
     mocker.patch(
-        "subprocess.run",
-        return_value=mocker.Mock(returncode=0, stdout=rg_output)
+        "subprocess.run", return_value=mocker.Mock(returncode=0, stdout=rg_output)
     )
 
     # Force ripgrep usage
@@ -638,8 +636,7 @@ def test_search_with_grep(temp_notes_dir, mocker):
     # Mock grep output
     grep_output = f"{note.path}:3:FOUND IT\n"
     mocker.patch(
-        "subprocess.run",
-        return_value=mocker.Mock(returncode=0, stdout=grep_output)
+        "subprocess.run", return_value=mocker.Mock(returncode=0, stdout=grep_output)
     )
 
     # Force grep usage
@@ -659,10 +656,8 @@ def test_search_timeout(temp_notes_dir, mocker):
 
     # Mock timeout
     import subprocess
-    mocker.patch(
-        "subprocess.run",
-        side_effect=subprocess.TimeoutExpired("rg", 30)
-    )
+
+    mocker.patch("subprocess.run", side_effect=subprocess.TimeoutExpired("rg", 30))
 
     # Force ripgrep usage
     mocker.patch.object(manager, "_detect_search_tool", return_value="ripgrep")
@@ -701,3 +696,210 @@ def test_parse_grep_output_with_context(temp_notes_dir):
     found_note, matches = results[0]
     assert found_note.path == note.path
     assert len(matches) == 3  # Main match + 2 context lines
+
+
+# ============================================================================
+# Advanced Filtering Tests
+# ============================================================================
+
+
+def test_filter_by_any_tag(temp_notes_dir):
+    """Test filtering notes by any tag (OR logic)."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create notes with different tags
+    note1 = manager.create_note("Note 1", "work", ["python", "web"])
+    note2 = manager.create_note("Note 2", "work", ["python", "data"])
+    note3 = manager.create_note("Note 3", "personal", ["web", "design"])
+    note4 = manager.create_note("Note 4", "personal", ["cooking"])
+
+    # Filter by single tag
+    results = manager.filter_by_any_tag(["python"])
+    assert len(results) == 2
+    assert note1 in results
+    assert note2 in results
+
+    # Filter by multiple tags (OR logic)
+    results = manager.filter_by_any_tag(["python", "cooking"])
+    assert len(results) == 3
+    assert note1 in results
+    assert note2 in results
+    assert note4 in results
+
+    # Filter by non-existent tag
+    results = manager.filter_by_any_tag(["nonexistent"])
+    assert len(results) == 0
+
+
+def test_filter_by_tags_vs_filter_by_any_tag(temp_notes_dir):
+    """Test difference between AND and OR tag filtering."""
+    manager = NoteManager(temp_notes_dir)
+
+    # Create notes
+    note1 = manager.create_note("Both Tags", "work", ["python", "web"])
+    note2 = manager.create_note("Python Only", "work", ["python"])
+    note3 = manager.create_note("Web Only", "work", ["web"])
+
+    # AND logic: filter_by_tags - must have ALL tags
+    and_results = manager.filter_by_tags(["python", "web"])
+    assert len(and_results) == 1
+    assert note1 in and_results
+
+    # OR logic: filter_by_any_tag - must have ANY tag
+    or_results = manager.filter_by_any_tag(["python", "web"])
+    assert len(or_results) == 3
+    assert note1 in or_results
+    assert note2 in or_results
+    assert note3 in or_results
+
+
+def test_filter_by_date_range_start_date(temp_notes_dir):
+    """Test filtering by start date only."""
+    from datetime import datetime, timedelta
+
+    manager = NoteManager(temp_notes_dir)
+
+    # Create notes with different timestamps
+    now = datetime.now()
+    past = now - timedelta(days=10)
+
+    note1 = manager.create_note("Old Note", "work", [])
+    note2 = manager.create_note("Recent Note", "work", [])
+
+    # Manually update timestamps to test date filtering
+    note1 = manager.update_note(
+        note1, content=note1.content
+    )  # Will have recent timestamp
+    # Note: In real scenario, note2 would be newer, but both will be recent after creation
+
+    # Filter for notes after a past date (should get all)
+    results = manager.filter_by_date_range(start_date=past)
+    assert len(results) >= 2
+
+
+def test_filter_by_date_range_end_date(temp_notes_dir):
+    """Test filtering by end date only."""
+    from datetime import datetime, timedelta
+
+    manager = NoteManager(temp_notes_dir)
+
+    now = datetime.now()
+    future = now + timedelta(days=10)
+
+    note1 = manager.create_note("Note 1", "work", [])
+    note2 = manager.create_note("Note 2", "work", [])
+
+    # Filter for notes before future date (should get all)
+    results = manager.filter_by_date_range(end_date=future)
+    assert len(results) >= 2
+
+
+def test_filter_by_date_range_both_dates(temp_notes_dir):
+    """Test filtering with both start and end dates."""
+    from datetime import datetime, timedelta
+
+    manager = NoteManager(temp_notes_dir)
+
+    now = datetime.now()
+    past = now - timedelta(days=10)
+    future = now + timedelta(days=10)
+
+    note = manager.create_note("Note", "work", [])
+
+    # Filter with range that includes the note
+    results = manager.filter_by_date_range(start_date=past, end_date=future)
+    assert len(results) >= 1
+    assert note in results
+
+
+def test_filter_by_date_range_created_field(temp_notes_dir):
+    """Test filtering on created_at instead of modified_at."""
+    from datetime import datetime, timedelta
+
+    manager = NoteManager(temp_notes_dir)
+
+    now = datetime.now()
+    past = now - timedelta(days=1)
+
+    note = manager.create_note("Note", "work", [])
+
+    # Filter by created date
+    results = manager.filter_by_date_range(start_date=past, date_field="created")
+    assert note in results
+
+
+def test_filter_by_date_range_invalid_field(temp_notes_dir):
+    """Test that invalid date_field raises error."""
+    from datetime import datetime
+
+    manager = NoteManager(temp_notes_dir)
+    manager.create_note("Note", "work", [])
+
+    with pytest.raises(NoteError, match="Invalid date_field"):
+        manager.filter_by_date_range(start_date=datetime.now(), date_field="invalid")
+
+
+def test_filter_notes_combined_filters(temp_notes_dir):
+    """Test composite filter_notes with multiple criteria."""
+    from datetime import datetime, timedelta
+
+    manager = NoteManager(temp_notes_dir)
+
+    now = datetime.now()
+    past = now - timedelta(days=1)
+
+    # Create diverse notes
+    note1 = manager.create_note("Work Python", "work", ["python", "web"])
+    note2 = manager.create_note("Work Java", "work", ["java"])
+    note3 = manager.create_note("Personal Python", "personal", ["python"])
+
+    # Filter by category only
+    results = manager.filter_notes(category="work")
+    assert len(results) == 2
+    assert note1 in results
+    assert note2 in results
+
+    # Filter by category + all_tags (AND)
+    results = manager.filter_notes(category="work", all_tags=["python", "web"])
+    assert len(results) == 1
+    assert note1 in results
+
+    # Filter by category + any_tags (OR)
+    results = manager.filter_notes(category="work", any_tags=["python", "java"])
+    assert len(results) == 2
+
+    # Filter with date range
+    results = manager.filter_notes(category="work", start_date=past)
+    assert len(results) >= 1
+
+
+def test_filter_notes_no_results(temp_notes_dir):
+    """Test filter_notes with criteria that match nothing."""
+    manager = NoteManager(temp_notes_dir)
+    manager.create_note("Note", "work", ["python"])
+
+    # Filter with non-matching criteria
+    results = manager.filter_notes(category="nonexistent")
+    assert len(results) == 0
+
+    results = manager.filter_notes(any_tags=["nonexistent"])
+    assert len(results) == 0
+
+
+def test_filter_notes_all_tags_vs_any_tags(temp_notes_dir):
+    """Test that all_tags and any_tags work correctly together."""
+    manager = NoteManager(temp_notes_dir)
+
+    note1 = manager.create_note("All Three", "work", ["python", "web", "data"])
+    note2 = manager.create_note("Python Web", "work", ["python", "web"])
+    note3 = manager.create_note("Python Only", "work", ["python"])
+
+    # Should match notes with python AND web
+    results = manager.filter_notes(all_tags=["python", "web"])
+    assert len(results) == 2
+    assert note1 in results
+    assert note2 in results
+
+    # Should match notes with python OR data
+    results = manager.filter_notes(any_tags=["python", "data"])
+    assert len(results) == 3  # All notes have python or data

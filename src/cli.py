@@ -2,6 +2,7 @@
 CLI interface for YANA using Typer.
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -93,6 +94,18 @@ def main(
     search: Optional[str] = typer.Option(
         None, "--search", "-s", help="Search note content (regex)"
     ),
+    tag: Optional[list[str]] = typer.Option(
+        None, "--tag", "-t", help="Filter by tag (can specify multiple, uses OR logic)"
+    ),
+    all_tags: bool = typer.Option(
+        False, "--all-tags", help="Use AND logic for tags (note must have all tags)"
+    ),
+    since: Optional[str] = typer.Option(
+        None, "--since", help="Filter notes modified since date (YYYY-MM-DD)"
+    ),
+    before: Optional[str] = typer.Option(
+        None, "--before", help="Filter notes modified before date (YYYY-MM-DD)"
+    ),
     daily: bool = typer.Option(False, "--daily", "-d", help="Open today's journal"),
     last: bool = typer.Option(False, "--last", "-l", help="Open last edited note"),
 ) -> None:
@@ -105,6 +118,10 @@ def main(
         yana                        # Browse all notes
         yana --category work        # Filter by category
         yana --search "TODO"        # Search note content
+        yana --tag python --tag web # Filter by tags (OR: python OR web)
+        yana --tag python --all-tags --tag coding  # AND: python AND coding
+        yana --since 2025-01-01     # Notes modified since Jan 1
+        yana --category work --tag meeting --since 2025-01-01  # Combined filters
         yana /path/to/note.md       # Open specific note
         yana --daily                # Open today's journal
         yana --last                 # Open last edited note
@@ -161,7 +178,9 @@ def main(
 
                 # Extract notes from results (discard match details for FZF)
                 matched_notes = [note for note, _ in search_results]
-                console.print(f"[green]Found {len(matched_notes)} note(s) with matches[/green]")
+                console.print(
+                    f"[green]Found {len(matched_notes)} note(s) with matches[/green]"
+                )
                 logger.info(f"Found {len(matched_notes)} matching notes")
 
                 # Launch FZF to select from matching notes
@@ -215,13 +234,60 @@ def main(
                 )
                 raise typer.Exit(0)
 
+            # Apply filters
+            filtered_notes = all_notes
+
+            # Apply category filter
+            if category:
+                filtered_notes = [n for n in filtered_notes if n.category == category]
+                logger.debug(f"Filtered by category '{category}': {len(filtered_notes)} notes")
+
+            # Apply tag filter
+            if tag:
+                if all_tags:
+                    # AND logic: note must have ALL tags
+                    filtered_notes = [
+                        n for n in filtered_notes
+                        if all(t in n.tags for t in tag)
+                    ]
+                    logger.debug(f"Filtered by all tags {tag}: {len(filtered_notes)} notes")
+                else:
+                    # OR logic: note must have ANY tag
+                    filtered_notes = [
+                        n for n in filtered_notes
+                        if any(t in n.tags for t in tag)
+                    ]
+                    logger.debug(f"Filtered by any tag {tag}: {len(filtered_notes)} notes")
+
+            # Apply date filters
+            if since or before:
+                try:
+                    start_date = datetime.strptime(since, "%Y-%m-%d") if since else None
+                    end_date = datetime.strptime(before, "%Y-%m-%d") if before else None
+
+                    filtered_notes = [
+                        n for n in filtered_notes
+                        if (not start_date or n.modified_at >= start_date)
+                        and (not end_date or n.modified_at <= end_date)
+                    ]
+                    logger.debug(f"Filtered by date range: {len(filtered_notes)} notes")
+                except ValueError as e:
+                    console.print(f"[red]Invalid date format:[/red] {e}")
+                    console.print("[yellow]Use YYYY-MM-DD format (e.g., 2025-01-01)[/yellow]")
+                    raise typer.Exit(1)
+
+            # Check if filtering resulted in no notes
+            if not filtered_notes:
+                console.print("[yellow]No notes match the specified filters[/yellow]")
+                raise typer.Exit(0)
+
             # Launch FZF to select note
             finder = NoteFuzzyFinder(
-                all_notes,
+                filtered_notes,
                 preview_enabled=config.fzf_preview,
                 preview_command=config.fzf_preview_command,
             )
-            note_to_open = finder.select(category_filter=category)
+            note_to_open = finder.select()
 
         # Handle FZF cancellation
         if not note_to_open:
