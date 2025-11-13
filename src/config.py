@@ -18,8 +18,6 @@ class Config:
     notes_dir: Path
     editor: str = "vim"
     git_enabled: bool = True
-    git_auto_commit: bool = True
-    git_auto_push: bool = False
     git_commit_interval: int = 300
     watch_enabled: bool = False
     fzf_preview: bool = True
@@ -77,14 +75,6 @@ def get_env_overrides() -> dict:
             "git_enabled",
             lambda x: x.lower() in ("true", "1", "yes"),
         ),
-        "YANA_GIT_AUTO_COMMIT": (
-            "git_auto_commit",
-            lambda x: x.lower() in ("true", "1", "yes"),
-        ),
-        "YANA_GIT_AUTO_PUSH": (
-            "git_auto_push",
-            lambda x: x.lower() in ("true", "1", "yes"),
-        ),
         "YANA_GIT_COMMIT_INTERVAL": ("git_commit_interval", int),
         "YANA_WATCH_ENABLED": (
             "watch_enabled",
@@ -115,8 +105,6 @@ def create_default_config(config_path: Path) -> None:
         "notes_dir": str(Path.home() / "notes"),
         "editor": os.getenv("EDITOR", "vim"),
         "git_enabled": True,
-        "git_auto_commit": True,
-        "git_auto_push": False,
         "git_commit_interval": 300,
         "watch_enabled": False,
         "fzf_preview": True,

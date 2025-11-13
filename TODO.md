@@ -142,10 +142,9 @@
 - [ ] Add network error detection
 
 ### Auto-Sync Workflow
-- [ ] Implement sync_before_edit() - pull if needed
-- [ ] Implement sync_after_edit(modified) - commit + push if modified
-- [ ] Add auto-commit message generation
-- [ ] Add git_auto_push config check
+- [x] Implement sync_before_edit() - pull if needed
+- [x] Implement sync_after_edit(modified) - commit if modified
+- [x] Add auto-commit message generation
 - [ ] Test sync with no remote
 - [ ] Test sync with conflicts
 - [ ] Test sync with network failure
@@ -172,14 +171,14 @@
 - [x] Handle keyboard interrupts gracefully (Ctrl+C)
 
 ### CLI Flow Logic
-- [ ] Implement browse_all_notes() - launch FZF with all notes
-- [ ] Implement browse_with_category_filter(category) - filtered FZF
-- [ ] Implement browse_directory(path) - FZF for specific folder
-- [ ] Implement open_specific_note(path) - direct editor open
-- [ ] Add git sync before opening note
-- [ ] Add git sync after closing editor
-- [ ] Handle FZF cancellation (exit gracefully)
-- [ ] Handle editor failures
+- [x] Implement browse_all_notes() - launch FZF with all notes
+- [x] Implement browse_with_category_filter(category) - filtered FZF
+- [x] Implement browse_directory(path) - FZF for specific folder
+- [x] Implement open_specific_note(path) - direct editor open
+- [x] Add git sync before opening note
+- [x] Add git sync after closing editor
+- [x] Handle FZF cancellation (exit gracefully)
+- [x] Handle editor failures
 
 ---
 
@@ -415,6 +414,11 @@
 - [x] Create comprehensive README with examples
 - [x] Simplify pyproject.toml
 - [x] Add python-frontmatter dependency
+- [x] **Implement complete CLI functionality - MVP working!**
+- [x] Wire up all commands (browse, new, sync, config)
+- [x] Implement all special flags (--daily, --last, --category)
+- [x] Add git sync workflow (pull before edit, commit after edit)
+- [x] Simplify config (removed git_auto_commit and git_auto_push)
 
 ---
 
