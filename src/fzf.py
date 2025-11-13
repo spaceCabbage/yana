@@ -29,11 +29,28 @@ class NoteFuzzyFinder:
         """
         Format note for FZF display.
 
-        Format: [category] Title | #tags | path
-        Example: [work-projects] Meeting Notes | #meeting #action-items | ~/notes/meeting-notes.md
+        Format: path | [category] Title | #tags
+        The path is included at the start for internal use but hidden from display.
+
+        Visible format:
+        - [category] Title | #tags (if category is not uncategorized and has tags)
+        - [category] Title (if category is not uncategorized and no tags)
+        - Title | #tags (if category is uncategorized and has tags)
+        - Title (if category is uncategorized and no tags)
+
+        Example: [work-projects] Meeting Notes | #meeting #action-items
+                 Meeting Notes | #coding
+                 Daily Standup
         """
+        # Build category prefix (hide if uncategorized)
+        category_prefix = "" if note.category == "uncategorized" else f"[{note.category}] "
+
+        # Build tags suffix (only show pipe if there are tags)
         tags = " ".join(f"#{tag}" for tag in note.tags) if note.tags else ""
-        return f"[{note.category}] {note.title} | {tags} | {note.path}"
+        tags_suffix = f" | {tags}" if tags else ""
+
+        # Include path at the beginning for internal use (will be hidden from display)
+        return f"{note.path} | {category_prefix}{note.title}{tags_suffix}"
 
     def parse_selection(self, selection: str) -> Optional[Note]:
         """
@@ -45,9 +62,9 @@ class NoteFuzzyFinder:
         Returns:
             Matching Note object or None
         """
-        # Extract path from end of selection
+        # Extract path from beginning of selection (before first |)
         try:
-            path_str = selection.split(" | ")[-1].strip()
+            path_str = selection.split(" | ")[0].strip()
             path = Path(path_str)
 
             # Find matching note
@@ -111,14 +128,20 @@ class NoteFuzzyFinder:
 
         # Add preview if enabled
         if preview_cmd:
-            # Extract path from formatted string for preview
+            # Extract path from formatted string for preview (first field before |)
             # FZF will pass the entire line to preview command
-            # We need to extract the path part
             fzf_options["preview"] = (
-                f"echo {{}} | awk -F' \\| ' '{{print $NF}}' | xargs {preview_cmd.replace('{}', '')}"
+                f"echo {{}} | awk -F' \\| ' '{{print $1}}' | xargs {preview_cmd.replace('{}', '')}"
             )
-            # Use __extra__ for FZF-specific options like preview-window
-            fzf_options["__extra__"] = ["--preview-window=right:50%:wrap"]
+            # Use __extra__ for FZF-specific options
+            # --delimiter=' | ' sets the field separator to " | "
+            # --with-nth=2.. hides the path field from display (shows only fields 2 onwards)
+            # --preview-window=down:50% creates horizontal split at bottom
+            fzf_options["__extra__"] = [
+                "--delimiter= | ",
+                "--with-nth=2..",
+                "--preview-window=down:50%:wrap"
+            ]
 
         # Launch FZF
         try:
@@ -155,12 +178,31 @@ class NoteFuzzyFinder:
         # Format notes for display
         items = [self.format_note_for_fzf(note) for note in notes_to_show]
 
+        # Get preview command
+        preview_cmd = self._get_preview_command()
+
+        # Build FZF options
+        fzf_options = {
+            "multi": True,
+            "exact": False,
+        }
+
+        # Add preview if enabled
+        if preview_cmd:
+            fzf_options["preview"] = (
+                f"echo {{}} | awk -F' \\| ' '{{print $1}}' | xargs {preview_cmd.replace('{}', '')}"
+            )
+            fzf_options["__extra__"] = [
+                "--delimiter= | ",
+                "--with-nth=2..",
+                "--preview-window=down:50%:wrap"
+            ]
+
         # Launch FZF with multi-select
         try:
             selections = iterfzf(
                 items,
-                multi=True,
-                exact=False,
+                **fzf_options,
             )
         except Exception as e:
             raise FzfError(f"FZF error: {e}")

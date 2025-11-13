@@ -199,7 +199,6 @@
 ### User Feedback
 - [x] Add success messages for operations
 - [x] Show spinner for slow git operations (Rich status with spinner)
-- [ ] Add progress bars for long operations (not needed for current operations)
 - [x] Show git sync status
 - [x] Add quiet mode (--quiet/-q)
 
