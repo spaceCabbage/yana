@@ -1,0 +1,8 @@
+[project]
+name = "yana"
+version = "0.1.0"
+description = "Yet another notes app"
+readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = []
